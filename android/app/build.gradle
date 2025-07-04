@@ -1,0 +1,130 @@
+// android/app/build.gradle
+
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+    id 'com.google.gms.google-services'
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {
+    flutterVersionCode = '1'
+}
+
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) {
+    flutterVersionName = '1.0'
+}
+
+android {
+    namespace "com.example.virtual_exercise_assistant"
+    compileSdk 35 
+    ndkVersion "25.1.8937393"
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    aaptOptions {
+        noCompress "tflite"
+        noCompress "task"
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        applicationId "com.example.virtual_exercise_assistant"
+        minSdkVersion 26  // Firebase Auth requires API 23+
+        targetSdkVersion 35
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+        
+        // Specify supported architectures for MediaPipe
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'
+        }
+        
+        multiDexEnabled true
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+            // minifyEnabled false
+            // proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    
+    
+
+    packagingOptions {
+        pickFirst '**/libc++_shared.so'
+        pickFirst '**/libmediapipe_tasks_vision_jni.so'
+        // Don't fail if x86_64 libs are missing
+        doNotStrip '**/libmediapipe_tasks_vision_jni.so'
+    }
+
+    
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
+        }
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+dependencies {
+    // Core Flutter dependencies
+    // implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22"
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4'
+    // implementation "https://plugins.gradle.org/plugin/org.jetbrains.kotlin.android/2.0.0"
+    
+    // Firebase (if using)
+    implementation platform('com.google.firebase:firebase-bom:32.7.0')
+    // implementation 'com.google.firebase:firebase-auth-ktx'
+    // implementation 'com.google.firebase:firebase-firestore-ktx'
+    
+    // MediaPipe - Use the correct working version
+    // implementation 'com.google.mediapipe:tasks-vision:0.10.8'
+    
+    // Alternative MediaPipe if above doesn't work
+    implementation 'com.google.mediapipe:tasks-vision:0.10.8'
+    implementation 'com.google.mediapipe:tasks-core:0.10.8'
+    // implementation 'com.google.mediapipe:mediapipe-core:0.10.14'
+    // implementation 'com.google.mediapipe:mediapipe-gpu:0.10.14'
+    
+    
+    
+    // TensorFlow Lite (often required by MediaPipe)
+    implementation 'org.tensorflow:tensorflow-lite:2.13.0'
+    implementation 'org.tensorflow:tensorflow-lite-support:0.4.4'
+    
+    // Multidex support
+    implementation 'androidx.multidex:multidex:2.0.1'
+
+    implementation 'androidx.camera:camera-core:1.2.0'
+
+    implementation 'androidx.core:core-ktx:1.10.1'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+}

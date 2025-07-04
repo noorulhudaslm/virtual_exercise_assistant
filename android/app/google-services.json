@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "646044653685",
+    "project_id": "virtual-exercise-assistant",
+    "storage_bucket": "virtual-exercise-assistant.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:646044653685:android:147d9119e7009eabb7403c",
+        "android_client_info": {
+          "package_name": "com.example.virtual_exercise_assistant"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "646044653685-5m8aoo46on2fj318lqor7kimm2021ibf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB7Q2lD0TKZjWZzGY70Qhj0RgD85s91meg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "646044653685-5m8aoo46on2fj318lqor7kimm2021ibf.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "646044653685-6uh5ps9can2plhjvf91vj499krcvq6q3.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.vea"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
