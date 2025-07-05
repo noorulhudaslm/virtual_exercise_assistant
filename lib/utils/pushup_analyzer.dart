@@ -65,12 +65,12 @@ class PushUpAnalyzer {
   static const List<String> bodyTypeNames = [
     'shortLimbs',
     'average',
-    'longLimbs', 
+    'longLimbs',
     'stocky',
-    'tallLean'
+    'tallLean',
   ];
 
-  // Extended elbow angle and phase constants  
+  // Extended elbow angle and phase constants
   static const double EXTENDED_ELBOW_ANGLE = 170.0;
   static const double HEAD_ALIGNMENT_THRESHOLD = 30.0;
 
@@ -101,13 +101,17 @@ class PushUpAnalyzer {
   // Voice feedback configuration maps
   static Map<String, String> _voiceFeedbackMap = {
     // Form corrections
-    'Hands too wide for your build! Move closer together': 'Hands too wide, move them closer together',
-    'Hands too narrow! Spread wider for your frame': 'Hands too narrow, spread them wider',
-    'Elbows flared too wide! Keep closer to body': 'Elbows too wide, keep them closer to your body',
-    'Elbows too close! Allow natural angle': 'Elbows too close, allow natural angle',
+    'Hands too wide for your build! Move closer together':
+        'Hands too wide, move them closer together',
+    'Hands too narrow! Spread wider for your frame':
+        'Hands too narrow, spread them wider',
+    'Elbows flared too wide! Keep closer to body':
+        'Elbows too wide, keep them closer to your body',
+    'Elbows too close! Allow natural angle':
+        'Elbows too close, allow natural angle',
     'Hips too high! Lower into plank': 'Lower your hips into plank position',
     'Hips sagging! Engage core': 'Engage your core, hips are sagging',
-    
+
     // Phase feedback
     'Keep descending - aim for your optimal depth': 'Keep going down',
     'Good descent! Control the movement': 'Good descent, control it',
@@ -118,20 +122,23 @@ class PushUpAnalyzer {
     'Excellent rep! Ready for next one': 'Excellent rep',
     'Perfect form for your body type!': 'Perfect form',
     'Good position - ready to start': 'Good position, ready to start',
-    
+
     // General positioning
-    'Position yourself fully in frame': 'Position yourself fully in the camera frame',
+    'Position yourself fully in frame':
+        'Position yourself fully in the camera frame',
   };
 
   // Initialize voice feedback
   static Future<void> initializeVoiceFeedback() async {
     _flutterTts = FlutterTts();
-    
+
     await _flutterTts!.setLanguage("en-US");
-    await _flutterTts!.setSpeechRate(0.6); // Slightly slower for exercise clarity
+    await _flutterTts!.setSpeechRate(
+      0.6,
+    ); // Slightly slower for exercise clarity
     await _flutterTts!.setVolume(0.8);
     await _flutterTts!.setPitch(1.0);
-    
+
     // Set completion handler
     _flutterTts!.setCompletionHandler(() {
       _isSpeaking = false;
@@ -145,38 +152,43 @@ class PushUpAnalyzer {
   }
 
   // Speak feedback with intelligent filtering
-  static Future<void> _speakFeedback(String text, {bool isUrgent = false}) async {
+  static Future<void> _speakFeedback(
+    String text, {
+    bool isUrgent = false,
+  }) async {
     if (!_isVoiceEnabled || _flutterTts == null) return;
-    
+
     DateTime now = DateTime.now();
-    
+
     // Get voice-optimized text
     String voiceText = _voiceFeedbackMap[text] ?? text;
-    
+
     // Intelligent timing rules
-    int minInterval = isUrgent ? 2000 : 4000; // Urgent feedback has shorter interval
-    
+    int minInterval = isUrgent
+        ? 2000
+        : 4000; // Urgent feedback has shorter interval
+
     // Skip if same message spoken recently (unless urgent)
-    if (!isUrgent && 
-        _lastSpokenText == voiceText && 
+    if (!isUrgent &&
+        _lastSpokenText == voiceText &&
         now.difference(_lastVoiceFeedback).inMilliseconds < minInterval) {
       return;
     }
-    
+
     // Skip if currently speaking (unless urgent)
     if (_isSpeaking && !isUrgent) {
       return;
     }
-    
+
     // Stop current speech if urgent
     if (isUrgent && _isSpeaking) {
       await _flutterTts!.stop();
     }
-    
+
     _isSpeaking = true;
     _lastSpokenText = voiceText;
     _lastVoiceFeedback = now;
-    
+
     try {
       await _flutterTts!.speak(voiceText);
     } catch (e) {
@@ -193,7 +205,7 @@ class PushUpAnalyzer {
       "rep $count complete",
       "$count down",
     ];
-    
+
     // Special milestones
     if (count == 5) {
       await _speakFeedback("5 reps! Keep it up", isUrgent: false);
@@ -203,8 +215,55 @@ class PushUpAnalyzer {
       await _speakFeedback("$count reps! You're crushing it", isUrgent: false);
     } else if (count <= 3) {
       // Announce first few reps
-      await _speakFeedback(motivationalPhrases[count % motivationalPhrases.length], isUrgent: false);
+      await _speakFeedback(
+        motivationalPhrases[count % motivationalPhrases.length],
+        isUrgent: false,
+      );
     }
+  }
+
+  // Check if a complete human pose is detected
+  static bool _isHumanPresent(Map<String, PoseLandmark?> landmarkMap) {
+    // Define minimum required landmarks for human detection
+    List<String> essentialLandmarks = [
+      'leftShoulder',
+      'rightShoulder',
+      'leftElbow',
+      'rightElbow',
+      'leftWrist',
+      'rightWrist',
+      'leftHip',
+      'rightHip',
+      'nose',
+    ];
+
+    // Check if all essential landmarks are present and have good confidence
+    for (String landmark in essentialLandmarks) {
+      if (landmarkMap[landmark] == null) {
+        return false;
+      }
+    }
+
+    // Additional check: verify landmarks are in reasonable positions
+    // (shoulders above hips, elbows between shoulders and wrists, etc.)
+    final leftShoulder = landmarkMap['leftShoulder']!;
+    final rightShoulder = landmarkMap['rightShoulder']!;
+    final leftHip = landmarkMap['leftHip']!;
+    final rightHip = landmarkMap['rightHip']!;
+
+    // Basic sanity checks
+    if (leftShoulder.y > leftHip.y || rightShoulder.y > rightHip.y) {
+      return false; // Shoulders should be above hips
+    }
+
+    // Check if person is roughly in push-up position (horizontal body)
+    double shoulderHipDistance = _calculateDistance(leftShoulder, leftHip);
+    if (shoulderHipDistance < 50) {
+      // Minimum torso length threshold
+      return false;
+    }
+
+    return true;
   }
 
   // Voice settings control
@@ -225,7 +284,7 @@ class PushUpAnalyzer {
     String? language,
   }) async {
     if (_flutterTts == null) return;
-    
+
     if (speechRate != null) await _flutterTts!.setSpeechRate(speechRate);
     if (volume != null) await _flutterTts!.setVolume(volume);
     if (pitch != null) await _flutterTts!.setPitch(pitch);
@@ -282,7 +341,7 @@ class PushUpAnalyzer {
 
     // Calculate shoulder width
     double shoulderWidth = _calculateDistance(leftShoulder, rightShoulder);
-    
+
     // Calculate hip width
     double hipWidth = _calculateDistance(leftHip, rightHip);
 
@@ -301,8 +360,9 @@ class PushUpAnalyzer {
       return AVERAGE;
     }
 
-    double avgRatio = _anthropometricHistory.reduce((a, b) => a + b) / 
-                     _anthropometricHistory.length;
+    double avgRatio =
+        _anthropometricHistory.reduce((a, b) => a + b) /
+        _anthropometricHistory.length;
 
     // Classification based on research-backed anthropometric ranges
     if (avgRatio < 1.1 && _shoulderToHipRatio > 1.15) {
@@ -344,20 +404,25 @@ class PushUpAnalyzer {
   }
 
   // Stabilized feedback system with voice integration
-  static void _updateFeedback(String feedback, Color color, Function(String, Color) onFeedbackUpdate) {
+  static void _updateFeedback(
+    String feedback,
+    Color color,
+    Function(String, Color) onFeedbackUpdate,
+  ) {
     DateTime now = DateTime.now();
-    
+
     // Determine if feedback is urgent (form corrections)
     bool isUrgent = color == Colors.red;
-    
+
     // Only update feedback if enough time has passed or it's significantly different
-    if (feedback != _lastFeedback && 
-        now.difference(_lastFeedbackChange).inMilliseconds > 2000) { // 2 second minimum
+    if (feedback != _lastFeedback &&
+        now.difference(_lastFeedbackChange).inMilliseconds > 2000) {
+      // 2 second minimum
       _lastFeedback = feedback;
       _lastFeedbackColor = color;
       _lastFeedbackChange = now;
       onFeedbackUpdate(feedback, color);
-      
+
       // Trigger voice feedback
       _speakFeedback(feedback, isUrgent: isUrgent);
     } else if (_lastFeedback.isNotEmpty) {
@@ -391,16 +456,66 @@ class PushUpAnalyzer {
       'nose': landmarks[PoseLandmarkType.nose],
     };
 
-    // Check critical landmarks
+    // Check if human is present before any analysis
+    if (!_isHumanPresent(landmarkMap)) {
+      // Reset session state when no human detected
+      if (_currentPhase != PHASE_STARTING) {
+        _currentPhase = PHASE_STARTING;
+        _elbowAngleHistory.clear();
+      }
+
+      // Don't provide feedback when no human is detected
+      return {
+        'phase': PHASE_STARTING,
+        'repCount': _repCount,
+        'formScore': 0,
+        'bodyType': getBodyTypeName(_detectedBodyType),
+        'humanPresent': false,
+      };
+    }
+
+    // Additional check for critical landmarks after human presence is confirmed
     List<String> criticalLandmarks = [
-      'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow',
-      'leftWrist', 'rightWrist', 'leftHip', 'rightHip'
+      'leftShoulder',
+      'rightShoulder',
+      'leftElbow',
+      'rightElbow',
+      'leftWrist',
+      'rightWrist',
+      'leftHip',
+      'rightHip',
     ];
 
     for (String landmark in criticalLandmarks) {
       if (landmarkMap[landmark] == null) {
-        _updateFeedback('Position yourself fully in frame', Colors.blue, onFeedbackUpdate);
-        return {'phase': _currentPhase, 'repCount': _repCount, 'formScore': 0, 'bodyType': getBodyTypeName(_detectedBodyType)};
+        _updateFeedback(
+          'Position yourself fully in frame',
+          Colors.blue,
+          onFeedbackUpdate,
+        );
+        return {
+          'phase': _currentPhase,
+          'repCount': _repCount,
+          'formScore': 0,
+          'bodyType': getBodyTypeName(_detectedBodyType),
+          'humanPresent': true,
+        };
+      }
+    }
+
+    for (String landmark in criticalLandmarks) {
+      if (landmarkMap[landmark] == null) {
+        _updateFeedback(
+          'Position yourself fully in frame',
+          Colors.blue,
+          onFeedbackUpdate,
+        );
+        return {
+          'phase': _currentPhase,
+          'repCount': _repCount,
+          'formScore': 0,
+          'bodyType': getBodyTypeName(_detectedBodyType),
+        };
       }
     }
 
@@ -411,16 +526,20 @@ class PushUpAnalyzer {
     });
 
     // Detect and adapt to body type
-    if (!_bodyTypeCalibrated || _repCount % 5 == 0) { // Recalibrate every 5 reps
+    if (!_bodyTypeCalibrated || _repCount % 5 == 0) {
+      // Recalibrate every 5 reps
       int previousBodyType = _detectedBodyType;
       _detectedBodyType = _detectBodyType(validLandmarks);
-      
+
       // Announce body type detection only once or when it changes
       if (!_bodyTypeCalibrated && _detectedBodyType != AVERAGE) {
         String bodyTypeName = getBodyTypeName(_detectedBodyType);
-        _speakFeedback("Detected $bodyTypeName body type, adapting form guidance", isUrgent: false);
+        _speakFeedback(
+          "Detected $bodyTypeName body type, adapting form guidance",
+          isUrgent: false,
+        );
       }
-      
+
       _bodyTypeCalibrated = true;
     }
 
@@ -442,14 +561,22 @@ class PushUpAnalyzer {
 
     // Smooth angle history
     _elbowAngleHistory.add(avgElbowAngle);
-    if (_elbowAngleHistory.length > 7) { // Increased smoothing
+    if (_elbowAngleHistory.length > 7) {
+      // Increased smoothing
       _elbowAngleHistory.removeAt(0);
     }
-    double smoothedElbowAngle = _elbowAngleHistory.reduce((a, b) => a + b) / _elbowAngleHistory.length;
+    double smoothedElbowAngle =
+        _elbowAngleHistory.reduce((a, b) => a + b) / _elbowAngleHistory.length;
 
     // Hand positioning with body type adaptation
-    double handDistance = _calculateDistance(validLandmarks['leftWrist']!, validLandmarks['rightWrist']!);
-    double shoulderDistance = _calculateDistance(validLandmarks['leftShoulder']!, validLandmarks['rightShoulder']!);
+    double handDistance = _calculateDistance(
+      validLandmarks['leftWrist']!,
+      validLandmarks['rightWrist']!,
+    );
+    double shoulderDistance = _calculateDistance(
+      validLandmarks['leftShoulder']!,
+      validLandmarks['rightShoulder']!,
+    );
     double handToShoulderRatio = handDistance / shoulderDistance;
 
     // Elbow flare analysis
@@ -463,12 +590,15 @@ class PushUpAnalyzer {
       validLandmarks['rightElbow']!,
       validLandmarks['rightHip']!,
     );
-    double avgElbowTorsoAngle = (leftElbowTorsoAngle + rightElbowTorsoAngle) / 2;
+    double avgElbowTorsoAngle =
+        (leftElbowTorsoAngle + rightElbowTorsoAngle) / 2;
 
     // Body alignment
     double avgPlankAlignment = 0;
-    if (validLandmarks['leftKnee'] != null && validLandmarks['leftAnkle'] != null &&
-        validLandmarks['rightKnee'] != null && validLandmarks['rightAnkle'] != null) {
+    if (validLandmarks['leftKnee'] != null &&
+        validLandmarks['leftAnkle'] != null &&
+        validLandmarks['rightKnee'] != null &&
+        validLandmarks['rightAnkle'] != null) {
       double leftPlankAlignment = _calculatePlankAlignment(
         validLandmarks['leftShoulder']!,
         validLandmarks['leftHip']!,
@@ -507,7 +637,8 @@ class PushUpAnalyzer {
       feedbackColor = Colors.orange;
       formScore -= 20;
     } else if (avgPlankAlignment > ranges['plankTolerance']!) {
-      if (validLandmarks['leftHip']!.y > validLandmarks['leftShoulder']!.y + 30) {
+      if (validLandmarks['leftHip']!.y >
+          validLandmarks['leftShoulder']!.y + 30) {
         feedback = 'Hips too high! Lower into plank';
         feedbackColor = Colors.red;
         formScore -= 25;
@@ -523,14 +654,15 @@ class PushUpAnalyzer {
 
     if (newPhase != _currentPhase) {
       DateTime now = DateTime.now();
-      if (now.difference(_lastPhaseChange).inMilliseconds > 500) { // Increased debounce
+      if (now.difference(_lastPhaseChange).inMilliseconds > 500) {
+        // Increased debounce
         _currentPhase = newPhase;
         _lastPhaseChange = now;
 
         if (_currentPhase == PHASE_TOP) {
           _repCount++;
           onRepCountUpdate(_repCount);
-          
+
           // Voice announcement for rep completion
           _announceRepCount(_repCount);
         }
@@ -555,8 +687,8 @@ class PushUpAnalyzer {
             feedback = 'Go deeper for your body type!';
             feedbackColor = Colors.orange;
             formScore -= 20;
-          } else if (smoothedElbowAngle >= ranges['elbowAngleMin']! && 
-                     smoothedElbowAngle <= ranges['elbowAngleMax']!) {
+          } else if (smoothedElbowAngle >= ranges['elbowAngleMin']! &&
+              smoothedElbowAngle <= ranges['elbowAngleMax']!) {
             feedback = 'Perfect depth for your build!';
             feedbackColor = Colors.green;
           } else {
@@ -600,11 +732,16 @@ class PushUpAnalyzer {
       'bodyAlignment': avgPlankAlignment,
       'bodyType': getBodyTypeName(_detectedBodyType),
       'armToTorsoRatio': _armToTorsoRatio,
+      'humanPresent': true,
     };
   }
 
   // Enhanced phase detection with body type specific ranges
-  static int _detectPhase(double currentAngle, int currentPhase, Map<String, double> ranges) {
+  static int _detectPhase(
+    double currentAngle,
+    int currentPhase,
+    Map<String, double> ranges,
+  ) {
     switch (currentPhase) {
       case PHASE_STARTING:
       case PHASE_TOP:
@@ -661,19 +798,31 @@ class PushUpAnalyzer {
   static Map<String, dynamic> getSessionStats() {
     String phaseName;
     switch (_currentPhase) {
-      case PHASE_STARTING: phaseName = 'starting'; break;
-      case PHASE_DESCENDING: phaseName = 'descending'; break;
-      case PHASE_BOTTOM: phaseName = 'bottom'; break;
-      case PHASE_ASCENDING: phaseName = 'ascending'; break;
-      case PHASE_TOP: phaseName = 'top'; break;
-      default: phaseName = 'unknown';
+      case PHASE_STARTING:
+        phaseName = 'starting';
+        break;
+      case PHASE_DESCENDING:
+        phaseName = 'descending';
+        break;
+      case PHASE_BOTTOM:
+        phaseName = 'bottom';
+        break;
+      case PHASE_ASCENDING:
+        phaseName = 'ascending';
+        break;
+      case PHASE_TOP:
+        phaseName = 'top';
+        break;
+      default:
+        phaseName = 'unknown';
     }
 
     return {
       'totalReps': _repCount,
       'currentPhase': phaseName,
       'avgElbowAngle': _elbowAngleHistory.isNotEmpty
-          ? _elbowAngleHistory.reduce((a, b) => a + b) / _elbowAngleHistory.length
+          ? _elbowAngleHistory.reduce((a, b) => a + b) /
+                _elbowAngleHistory.length
           : 0,
       'detectedBodyType': getBodyTypeName(_detectedBodyType),
       'armToTorsoRatio': _armToTorsoRatio,
@@ -688,20 +837,24 @@ class PushUpAnalyzer {
     switch (_detectedBodyType) {
       case SHORT_LIMBS:
         return {
-          'handPlacement': 'Slightly narrower than shoulder-width works well for you',
+          'handPlacement':
+              'Slightly narrower than shoulder-width works well for you',
           'elbowAngle': 'Aim for 65-85° at the bottom - you have good leverage',
           'tempo': 'You can handle faster tempo due to shorter range of motion',
         };
       case LONG_LIMBS:
         return {
-          'handPlacement': 'Wider hand placement (1.5x shoulders) will feel more natural',
+          'handPlacement':
+              'Wider hand placement (1.5x shoulders) will feel more natural',
           'elbowAngle': 'Aim for 75-95° - don\'t force deeper angles',
-          'tempo': 'Slower, controlled movement - you have longer range of motion',
+          'tempo':
+              'Slower, controlled movement - you have longer range of motion',
         };
       case STOCKY:
         return {
           'handPlacement': 'Standard shoulder-width, focus on stability',
-          'elbowAngle': 'Slightly shallower angles (70-85°) are fine for your build',
+          'elbowAngle':
+              'Slightly shallower angles (70-85°) are fine for your build',
           'tempo': 'Powerful explosive movement suits your body type',
         };
       case TALL_LEAN:
@@ -722,18 +875,25 @@ class PushUpAnalyzer {
   // Workout session voice guidance
   static Future<void> startWorkoutSession({int? targetReps}) async {
     if (targetReps != null) {
-      await _speakFeedback("Starting push-up session. Target: $targetReps reps. Get into position", isUrgent: false);
+      await _speakFeedback(
+        "Starting push-up session. Target: $targetReps reps. Get into position",
+        isUrgent: false,
+      );
     } else {
-      await _speakFeedback("Starting push-up session. Get into position", isUrgent: false);
+      await _speakFeedback(
+        "Starting push-up session. Get into position",
+        isUrgent: false,
+      );
     }
   }
 
   static Future<void> endWorkoutSession() async {
     Map<String, dynamic> stats = getSessionStats();
     int totalReps = stats['totalReps'];
-    
+
     if (totalReps > 0) {
-      String message = "Workout complete! You did $totalReps push-ups. Great job!";
+      String message =
+          "Workout complete! You did $totalReps push-ups. Great job!";
       await _speakFeedback(message, isUrgent: false);
     } else {
       await _speakFeedback("Session ended. Keep practicing!", isUrgent: false);
@@ -744,16 +904,19 @@ class PushUpAnalyzer {
   static Future<void> provideFormCoaching() async {
     Map<String, String> recommendations = getBodyTypeRecommendations();
     String bodyType = getBodyTypeName(_detectedBodyType);
-    
-    await _speakFeedback("Form coaching for $bodyType body type", isUrgent: false);
-    
+
+    await _speakFeedback(
+      "Form coaching for $bodyType body type",
+      isUrgent: false,
+    );
+
     // Wait between coaching tips
     await Future.delayed(Duration(seconds: 2));
     await _speakFeedback(recommendations['handPlacement']!, isUrgent: false);
-    
+
     await Future.delayed(Duration(seconds: 3));
     await _speakFeedback(recommendations['elbowAngle']!, isUrgent: false);
-    
+
     await Future.delayed(Duration(seconds: 3));
     await _speakFeedback(recommendations['tempo']!, isUrgent: false);
   }
@@ -768,7 +931,10 @@ class PushUpAnalyzer {
 
   // Test voice functionality
   static Future<void> testVoice() async {
-    await _speakFeedback("Voice feedback is working. Ready for your workout!", isUrgent: false);
+    await _speakFeedback(
+      "Voice feedback is working. Ready for your workout!",
+      isUrgent: false,
+    );
   }
 
   // Dispose voice resources

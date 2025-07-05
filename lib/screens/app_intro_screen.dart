@@ -623,7 +623,8 @@ class _AppIntroScreenState extends State<AppIntroScreen> {
           context,
           MaterialPageRoute(
             builder: (context) => CameraScreen(
-              camera: selectedCamera,
+              serverUrl:  'ws://192.168.1.100:8000',
+              camera: null,
               exerciseName: null, // Let AI detect automatically
             ),
           ),

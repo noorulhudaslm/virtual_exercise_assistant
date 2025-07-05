@@ -9,6 +9,7 @@ import '../auth/auth_services.dart';
 import '../screens/help_support.dart';
 import '../screens/exercise_list.dart';
 import '../screens/homepage.dart';
+import '../screens/exercise_history.dart';
 
 class AppDrawer extends StatelessWidget {
   @override
@@ -112,7 +113,12 @@ class AppDrawer extends StatelessWidget {
                     'Workout History',
                     () {
                       Navigator.pop(context);
-                      _showComingSoon(context, 'Workout History');
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ExerciseHistoryScreen(),
+                        ),
+                      );
                     },
                   ),
 

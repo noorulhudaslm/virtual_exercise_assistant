@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'simple_camera_screen.dart';
 import '../widgets/exercise_icons.dart';
 
@@ -19,6 +21,10 @@ class _ExerciseListScreenState extends State<ExerciseListScreen>
   List<CameraDescription>? _cameras;
   bool _isCameraInitialized = false;
   String? _cameraError;
+
+  // Firestore instance
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // Move exercises list to a getter to avoid initialization issues
   List<Map<String, dynamic>> get exercises => [
@@ -68,7 +74,7 @@ class _ExerciseListScreenState extends State<ExerciseListScreen>
       'name': 'Bench Press',
       'description': 'Chest, shoulders, triceps',
       'color': const Color(0xFF1BFFFF),
-      'icon': BenchPressIcon(controller: _iconController), // Create a new icon
+      'icon': BenchPressIcon(controller: _iconController),
     },
   ];
 
@@ -136,6 +142,128 @@ class _ExerciseListScreenState extends State<ExerciseListScreen>
     super.dispose();
   }
 
+  // Store exercise session in Firestore
+  Future<String?> _storeExerciseSession(String exerciseName) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) {
+        _showSnackBar('Please log in to track your exercises', Colors.orange);
+        return null;
+      }
+
+      final sessionData = {
+        'userId': user.uid,
+        'exerciseName': exerciseName,
+        'startTime': FieldValue.serverTimestamp(),
+        'status': 'in_progress',
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+
+      final docRef = await _firestore
+          .collection('exercise_sessions')
+          .add(sessionData);
+
+      debugPrint('Exercise session stored with ID: ${docRef.id}');
+      return docRef.id;
+    } catch (e) {
+      debugPrint('Error storing exercise session: $e');
+      _showSnackBar('Failed to save exercise session: $e', Colors.red);
+      return null;
+    }
+  }
+
+  // Update exercise session when completed
+  Future<void> _updateExerciseSession(
+    String sessionId, {
+    int? reps,
+    int? sets,
+    Duration? duration,
+    String? status,
+  }) async {
+    try {
+      final updateData = <String, dynamic>{
+        'endTime': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (reps != null) updateData['reps'] = reps;
+      if (sets != null) updateData['sets'] = sets;
+      if (duration != null) updateData['duration'] = duration.inSeconds;
+      if (status != null) updateData['status'] = status;
+
+      await _firestore
+          .collection('exercise_sessions')
+          .doc(sessionId)
+          .update(updateData);
+
+      debugPrint('Exercise session updated successfully');
+    } catch (e) {
+      debugPrint('Error updating exercise session: $e');
+    }
+  }
+
+  // Store user exercise history/statistics
+  Future<void> _updateUserExerciseStats(String exerciseName) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
+      final userStatsRef = _firestore
+          .collection('user_exercise_stats')
+          .doc(user.uid);
+
+      await _firestore.runTransaction((transaction) async {
+        final doc = await transaction.get(userStatsRef);
+
+        if (doc.exists) {
+          final data = doc.data() as Map<String, dynamic>;
+          final exerciseStats =
+              data['exercises'] as Map<String, dynamic>? ?? {};
+
+          if (exerciseStats.containsKey(exerciseName)) {
+            final currentStats =
+                exerciseStats[exerciseName] as Map<String, dynamic>;
+            exerciseStats[exerciseName] = {
+              'count': (currentStats['count'] ?? 0) + 1,
+              'lastPerformed': FieldValue.serverTimestamp(),
+              'firstPerformed': currentStats['firstPerformed'],
+            };
+          } else {
+            exerciseStats[exerciseName] = {
+              'count': 1,
+              'lastPerformed': FieldValue.serverTimestamp(),
+              'firstPerformed': FieldValue.serverTimestamp(),
+            };
+          }
+
+          transaction.update(userStatsRef, {
+            'exercises': exerciseStats,
+            'totalSessions': (data['totalSessions'] ?? 0) + 1,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          transaction.set(userStatsRef, {
+            'userId': user.uid,
+            'exercises': {
+              exerciseName: {
+                'count': 1,
+                'lastPerformed': FieldValue.serverTimestamp(),
+                'firstPerformed': FieldValue.serverTimestamp(),
+              },
+            },
+            'totalSessions': 1,
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      });
+
+      debugPrint('User exercise stats updated successfully');
+    } catch (e) {
+      debugPrint('Error updating user exercise stats: $e');
+    }
+  }
+
   Future<void> _openCamera(String exerciseName) async {
     if (!_isCameraInitialized) {
       _showSnackBar(
@@ -150,6 +278,21 @@ class _ExerciseListScreenState extends State<ExerciseListScreen>
       return;
     }
 
+    // Store exercise session in Firestore
+    _showSnackBar('Starting $exerciseName session...', Colors.blue);
+
+    final sessionId = await _storeExerciseSession(exerciseName);
+    if (sessionId == null) {
+      // If storing session failed, still proceed with camera but show warning
+      _showSnackBar(
+        'Exercise session not saved, but proceeding...',
+        Colors.orange,
+      );
+    }
+
+    // Update user exercise stats
+    await _updateUserExerciseStats(exerciseName);
+
     // Find front camera, fallback to first available
     CameraDescription? selectedCamera;
     try {
@@ -163,23 +306,40 @@ class _ExerciseListScreenState extends State<ExerciseListScreen>
     if (!mounted) return;
 
     try {
-      await Navigator.push(
+      final result = await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => SimpleCameraScreen(
             camera: selectedCamera!,
             exerciseName: exerciseName,
+            sessionId: sessionId, // Pass session ID to camera screen
           ),
         ),
       );
+
+      // Update session when returning from camera
+      if (sessionId != null && result != null) {
+        await _updateExerciseSession(
+          sessionId,
+          status: result['status'] ?? 'completed',
+          reps: result['reps'],
+          sets: result['sets'],
+          duration: result['duration'],
+        );
+      }
     } catch (e) {
       _showSnackBar('Failed to open camera: $e', Colors.red);
+
+      // Update session as failed if it was created
+      if (sessionId != null) {
+        await _updateExerciseSession(sessionId, status: 'failed');
+      }
     }
   }
 
   void _showSnackBar(String message, Color backgroundColor) {
     if (!mounted) return;
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -329,7 +489,7 @@ class _ExerciseListScreenState extends State<ExerciseListScreen>
                 ),
               ],
               border: Border.all(
-                color: Colors.white.withOpacity(0.2), 
+                color: Colors.white.withOpacity(0.2),
                 width: 1,
               ),
             ),
@@ -357,10 +517,7 @@ class _ExerciseListScreenState extends State<ExerciseListScreen>
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: Colors.white.withOpacity(0.15),
-        border: Border.all(
-          color: exercise['color'].withOpacity(0.5),
-          width: 2,
-        ),
+        border: Border.all(color: exercise['color'].withOpacity(0.5), width: 2),
       ),
       child: Center(child: exercise['icon']),
     );
@@ -406,17 +563,9 @@ class _ExerciseListScreenState extends State<ExerciseListScreen>
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          Icons.camera_alt,
-          size: 18,
-          color: exercise['color'],
-        ),
+        Icon(Icons.camera_alt, size: 18, color: exercise['color']),
         const SizedBox(height: 8),
-        const Icon(
-          Icons.arrow_forward_ios,
-          size: 14,
-          color: Colors.white70,
-        ),
+        const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white70),
       ],
     );
   }

@@ -1,843 +1,536 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'dart:typed_data';
-import 'dart:async';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:web_socket_channel/io.dart';
-import 'dart:io';
-import 'dart:math' as math;
+import 'package:permission_handler/permission_handler.dart';
 import 'package:uuid/uuid.dart';
 
 class CameraScreen extends StatefulWidget {
+  final String serverUrl;
   final CameraDescription? camera;
   final String? exerciseName;
 
-  const CameraScreen({super.key, this.camera, this.exerciseName});
+  const CameraScreen({
+    Key? key,
+    this.serverUrl = 'http://192.168.1.200:8000', // Default server URL
+    this.camera,
+    this.exerciseName,
+  }) : super(key: key);
 
   @override
-  _CameraScreenState createState() => _CameraScreenState();
+  State<CameraScreen> createState() => _CameraScreenState();
 }
 
-class _CameraScreenState extends State<CameraScreen>
-    with WidgetsBindingObserver, TickerProviderStateMixin {
+class _CameraScreenState extends State<CameraScreen> {
   CameraController? _cameraController;
-  bool _isInitialized = false;
+  WebSocketChannel? _webSocketChannel;
+  bool _isCameraInitialized = false;
+  bool _isConnected = false;
   bool _isProcessing = false;
 
-  // Camera switching
-  List<CameraDescription> _availableCameras = [];
-  int _currentCameraIndex = 0;
-  bool _isSwitchingCamera = false;
+  // Client ID for WebSocket connection
+  final String _clientId = const Uuid().v4();
 
-  // FastAPI WebSocket configuration
-  static const String serverUrl = 'http://192.168.1.5:5000/predict'; // Updated to port 8000
-  static const String wsUrl = 'ws://192.168.1.195:8000'; // WebSocket URL
-  WebSocketChannel? _channel;
-  String _clientId = '';
-  Timer? _captureTimer;
-  bool _isServerReady = false;
-  bool _isConnected = false;
+  // Frame processing
+  Timer? _frameTimer;
+  static const int _frameInterval = 100; // Send frame every 100ms
 
-  // Classification results
-  String _currentExercise = 'No exercise detected';
+  // Prediction data
+  String _currentExercise = 'No prediction';
+  String? _targetExercise;
   double _confidence = 0.0;
-  String _status = 'Connecting...';
-  int _exerciseClass = -1;
+  String _connectionStatus = 'Disconnected';
+  bool _isTargetExercise = false;
 
-  // UI State
-  int _frameCount = 0;
-  int _repCount = 0;
-  String _lastExercise = '';
-  DateTime? _lastPredictionTime;
-
-  // Animation controllers
-  late AnimationController _fadeController;
-  late Animation<double> _fadeAnimation;
-
-  // Exercise session tracking
-  DateTime? _sessionStartTime;
-  Map<String, int> _exerciseCounts = {};
-
-  // Prediction smoothing
-  List<Map<String, dynamic>> _predictionHistory = [];
-  static const int maxHistoryLength = 5;
-
-  // Frame processing optimization
-  int _currentFPS = 3; // Start with 3 FPS for WebSocket
-  static const int minFPS = 1;
-  static const int maxFPS = 5;
-  bool _isCapturing = false;
-
-  // Available exercise names (matching FastAPI)
-  final List<String> _exerciseNames = [
-    "Push-up", "Pull-up", "Squat", "Deadlift", 
-    "Bench Press", "Lat Pulldown", "Bicep Curl", "Tricep Pushdown"
-  ];
+  // Exercise colors for UI
+  final Map<String, Color> _exerciseColors = {
+    'Push-up': Colors.red,
+    'Pull-up': Colors.blue,
+    'Squat': Colors.green,
+    'Deadlift': Colors.orange,
+    'Bench Press': Colors.purple,
+    'Lat Pulldown': Colors.teal,
+    'Bicep Curl': Colors.indigo,
+    'Tricep Pushdown': Colors.pink,
+  };
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _clientId = const Uuid().v4();
-    _initializeAnimations();
-    _requestPermissions().then((_) {
-      _initializeCameras();
-    });
-  }
-
-  Future<void> _requestPermissions() async {
-    await [Permission.camera].request();
-  }
-
-  void _initializeAnimations() {
-    _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 500),
-      vsync: this,
-    );
-
-    _fadeAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
-      CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
-    );
-
-    _fadeController.forward();
+    _targetExercise = widget.exerciseName;
+    _initializeCamera();
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _disconnectWebSocket();
-    _captureTimer?.cancel();
-    _fadeController.dispose();
+    _frameTimer?.cancel();
+    _webSocketChannel?.sink.close();
     _cameraController?.dispose();
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    final CameraController? cameraController = _cameraController;
-
-    if (cameraController == null || !cameraController.value.isInitialized) {
-      return;
-    }
-
-    switch (state) {
-      case AppLifecycleState.paused:
-        _stopExerciseRecognition();
-        _disconnectWebSocket();
-        cameraController.dispose();
-        setState(() => _isInitialized = false);
-        break;
-      case AppLifecycleState.resumed:
-        _initializeCamera();
-        break;
-      case AppLifecycleState.inactive:
-        _stopExerciseRecognition();
-        break;
-      default:
-        break;
-    }
-  }
-
-  Future<void> _initializeCameras() async {
-    try {
-      _availableCameras = await availableCameras();
-
-      // Find the front camera by default
-      _currentCameraIndex = _availableCameras.indexWhere(
-        (camera) => camera.lensDirection == CameraLensDirection.front,
-      );
-
-      if (_currentCameraIndex == -1) {
-        _currentCameraIndex = 0;
-      }
-
-      await _initializeCamera();
-    } catch (e) {
-      print('Failed to initialize cameras: $e');
-      if (mounted) {
-        _showErrorDialog('Camera Error', 'Failed to initialize cameras: $e');
-      }
-    }
-  }
-
   Future<void> _initializeCamera() async {
     try {
-      if (_availableCameras.isEmpty) {
-        throw Exception('No cameras available');
+      // Request camera permission
+      final permission = await Permission.camera.request();
+      if (permission != PermissionStatus.granted) {
+        setState(() {
+          _connectionStatus = 'Camera permission denied';
+        });
+        return;
       }
 
-      await _cameraController?.dispose();
+      // Get available cameras
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) {
+        setState(() {
+          _connectionStatus = 'No cameras available';
+        });
+        return;
+      }
 
+      // Use provided camera or default to first camera
+      final selectedCamera = widget.camera ?? cameras.first;
+
+      // Initialize camera controller
       _cameraController = CameraController(
-        _availableCameras[_currentCameraIndex],
-        ResolutionPreset.medium, // Medium resolution for better quality
+        selectedCamera,
+        ResolutionPreset.medium,
         enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.jpeg,
       );
 
       await _cameraController!.initialize();
-      if (mounted) {
-        setState(() => _isInitialized = true);
-        _checkServerHealth().then((_) {
-          if (_isServerReady) {
-            _connectWebSocket();
-          }
-        });
-      }
-    } catch (e) {
-      print('Camera initialization error: $e');
-      if (mounted) {
-        _showErrorDialog('Camera Error', 'Failed to initialize camera: $e');
-      }
-    }
-  }
-
-  Future<void> _switchCamera() async {
-    if (_availableCameras.length <= 1 || _isSwitchingCamera) return;
-
-    setState(() {
-      _isSwitchingCamera = true;
-    });
-
-    try {
-      _stopExerciseRecognition();
-      _currentCameraIndex = (_currentCameraIndex + 1) % _availableCameras.length;
-      
-      setState(() {
-        _isInitialized = false;
-      });
-
-      await _initializeCamera();
 
       if (mounted) {
-        final cameraType = _availableCameras[_currentCameraIndex].lensDirection ==
-                CameraLensDirection.front ? 'Front' : 'Back';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Switched to $cameraType Camera'),
-            duration: const Duration(seconds: 1),
-            backgroundColor: const Color(0xFF5494DD),
-          ),
-        );
-      }
-    } catch (e) {
-      print('Camera switch error: $e');
-      if (mounted) {
-        _showErrorDialog('Camera Switch Error', 'Failed to switch camera: $e');
-      }
-    } finally {
-      setState(() {
-        _isSwitchingCamera = false;
-      });
-    }
-  }
-
-  Future<void> _checkServerHealth() async {
-    try {
-      final response = await http
-          .get(
-            Uri.parse('$serverUrl/health'),
-            headers: {'Content-Type': 'application/json'},
-          )
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
         setState(() {
-          _isServerReady = data['status'] == 'healthy';
-          _status = _isServerReady ? 'Server ready' : 'Server not ready';
+          _isCameraInitialized = true;
+          _connectionStatus = 'Camera initialized';
         });
-      } else {
-        setState(() {
-          _isServerReady = false;
-          _status = 'Server error: ${response.statusCode}';
-        });
+
+        // Connect to WebSocket
+        _connectWebSocket();
       }
     } catch (e) {
-      setState(() {
-        _isServerReady = false;
-        _status = 'Server unavailable: $e';
-      });
-      // Schedule a retry
-      Future.delayed(const Duration(seconds: 5), _checkServerHealth);
+      if (mounted) {
+        setState(() {
+          _connectionStatus = 'Error initializing camera: $e';
+        });
+      }
     }
   }
 
-  Future<void> _connectWebSocket() async {
+  void _connectWebSocket() {
     try {
-      setState(() {
-        _status = 'Connecting to WebSocket...';
-      });
-
-      _channel = IOWebSocketChannel.connect(
-        Uri.parse('$wsUrl/ws/$_clientId'),
-        headers: {},
-      );
-
-      // Listen for messages
-      _channel!.stream.listen(
-        (message) {
-          _handleWebSocketMessage(message);
-        },
-        onError: (error) {
-          print('WebSocket error: $error');
-          setState(() {
-            _isConnected = false;
-            _status = 'WebSocket error: $error';
-          });
-          _reconnectWebSocket();
-        },
-        onDone: () {
-          print('WebSocket connection closed');
-          setState(() {
-            _isConnected = false;
-            _status = 'Connection closed';
-          });
-        },
-      );
+      // Fix: Use ws:// directly instead of converting from http://
+      final wsUrl = 'ws://192.168.1.200:8000/ws/$_clientId';
+      _webSocketChannel = WebSocketChannel.connect(Uri.parse(wsUrl));
 
       setState(() {
         _isConnected = true;
-        _status = 'Connected to WebSocket';
+        _connectionStatus = 'Connected to server';
       });
 
-      // Start frame capture after connection
-      _startFrameCapture();
+      // Rest of the method remains the same...
 
+      // Listen to WebSocket messages
+      _webSocketChannel!.stream.listen(
+        (message) {
+          if (mounted) {
+            _handleServerMessage(message);
+          }
+        },
+        onError: (error) {
+          if (mounted) {
+            setState(() {
+              _isConnected = false;
+              _connectionStatus = 'WebSocket error: $error';
+            });
+          }
+        },
+        onDone: () {
+          if (mounted) {
+            setState(() {
+              _isConnected = false;
+              _connectionStatus = 'Connection closed';
+            });
+          }
+        },
+      );
+
+      // Start sending frames
+      _startFrameProcessing();
     } catch (e) {
-      print('WebSocket connection error: $e');
       setState(() {
         _isConnected = false;
-        _status = 'Connection failed: $e';
+        _connectionStatus = 'Failed to connect: $e';
       });
-      _reconnectWebSocket();
     }
   }
 
-  void _handleWebSocketMessage(dynamic message) {
+  void _handleServerMessage(dynamic message) {
+    if (!mounted) return;
+
     try {
       final data = json.decode(message);
-      
-      if (data['type'] == 'prediction') {
+
+      if (data['type'] == 'prediction' && data['data'] != null) {
         final predictionData = data['data'];
-        
+
         setState(() {
-          _exerciseClass = predictionData['class'];
-          _currentExercise = predictionData['label'];
-          _confidence = predictionData['confidence'];
-          _lastPredictionTime = DateTime.now();
-          
-          // Update status with confidence
-          if (_confidence > 0.8) {
-            _status = 'High confidence detection';
-          } else if (_confidence > 0.6) {
-            _status = 'Moderate confidence detection';
-          } else {
-            _status = 'Low confidence detection';
+          _currentExercise = predictionData['exercise_label'] ?? 'Unknown';
+          _confidence = (predictionData['confidence'] ?? 0.0).toDouble();
+
+          // Check if prediction matches target exercise
+          if (_targetExercise != null) {
+            _isTargetExercise =
+                _currentExercise.toLowerCase() ==
+                _targetExercise!.toLowerCase();
           }
         });
-
-        // Update exercise stats
-        _updateExerciseStats(_currentExercise, _confidence);
-        
-        // Add to prediction history for smoothing
-        _predictionHistory.add({
-          'exercise': _currentExercise,
-          'confidence': _confidence,
-          'timestamp': DateTime.now().millisecondsSinceEpoch,
-        });
-        
-        if (_predictionHistory.length > maxHistoryLength) {
-          _predictionHistory.removeAt(0);
-        }
       }
     } catch (e) {
-      print('Error parsing WebSocket message: $e');
+      print('Error parsing server message: $e');
     }
   }
 
-  void _reconnectWebSocket() {
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted && _isServerReady && !_isConnected) {
-        _connectWebSocket();
+  void _startFrameProcessing() {
+    if (_frameTimer != null) {
+      _frameTimer!.cancel();
+    }
+
+    _frameTimer = Timer.periodic(Duration(milliseconds: _frameInterval), (
+      timer,
+    ) {
+      if (_isConnected &&
+          !_isProcessing &&
+          mounted &&
+          _cameraController != null &&
+          _cameraController!.value.isInitialized) {
+        _captureAndSendFrame();
       }
     });
-  }
-
-  void _disconnectWebSocket() {
-    _channel?.sink.close();
-    _channel = null;
-    setState(() {
-      _isConnected = false;
-    });
-  }
-
-  Future<void> _startFrameCapture() async {
-    if (!_isConnected || _isCapturing) return;
-
-    setState(() {
-      _frameCount = 0;
-      _sessionStartTime = DateTime.now();
-      _status = 'Starting frame capture...';
-    });
-
-    _captureTimer = Timer.periodic(
-      Duration(milliseconds: (1000 / _currentFPS).round()),
-      (timer) => _captureAndSendFrame(),
-    );
-
-    _isCapturing = true;
   }
 
   Future<void> _captureAndSendFrame() async {
-    if (!_isInitialized || 
-        _cameraController == null || 
-        !_isConnected || 
-        _isProcessing) return;
-
-    _isProcessing = true;
+    if (_cameraController == null ||
+        !_cameraController!.value.isInitialized ||
+        !mounted) {
+      return;
+    }
 
     try {
+      setState(() {
+        _isProcessing = true;
+      });
+
+      // Capture image
       final XFile image = await _cameraController!.takePicture();
       final Uint8List imageBytes = await image.readAsBytes();
+
+      // Check if still mounted before proceeding
+      if (!mounted) return;
+
+      // Convert to base64
       final String base64Image = base64Encode(imageBytes);
 
-      // Send frame via WebSocket
+      // Prepare frame data
       final frameData = {
+        'type': 'frame',
         'frame': base64Image,
-        'timestamp': DateTime.now().millisecondsSinceEpoch / 1000,
+        'timestamp': DateTime.now().millisecondsSinceEpoch / 1000.0,
       };
 
-      _channel?.sink.add(json.encode(frameData));
-
-      setState(() {
-        _frameCount++;
-      });
-
+      // Send to server
+      if (_webSocketChannel != null && _isConnected) {
+        _webSocketChannel!.sink.add(json.encode(frameData));
+      }
     } catch (e) {
-      print('Frame capture error: $e');
-      setState(() {
-        _status = 'Frame capture error: $e';
-      });
+      print('Error capturing frame: $e');
     } finally {
-      _isProcessing = false;
-    }
-  }
-
-  Future<void> _stopExerciseRecognition() async {
-    _captureTimer?.cancel();
-    _isCapturing = false;
-    setState(() {
-      _status = 'Stopped';
-    });
-  }
-
-  void _updateExerciseStats(String exercise, double confidence) {
-    // Count reps when exercise changes with good confidence
-    if (confidence > 0.7 &&
-        exercise != _lastExercise &&
-        exercise != 'No exercise detected' &&
-        exercise.isNotEmpty) {
-      
-      setState(() {
-        _repCount++;
-        _exerciseCounts[exercise] = (_exerciseCounts[exercise] ?? 0) + 1;
-      });
-      
-      _lastExercise = exercise;
-      
-      // Show rep count feedback
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$exercise Rep #$_repCount'),
-            duration: const Duration(seconds: 1),
-            backgroundColor: Colors.green,
-          ),
-        );
+        setState(() {
+          _isProcessing = false;
+        });
       }
     }
   }
 
-  void _showErrorDialog(String title, String message) {
-    if (mounted) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(title),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pop();
-              },
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
+  void _toggleConnection() {
+    if (_isConnected) {
+      _disconnect();
+    } else {
+      _connectWebSocket();
     }
   }
 
-  // UI Building Methods
-  Widget _buildCameraPreview() {
-    if (!_isInitialized || _cameraController == null || _isSwitchingCamera) {
-      return Container(
-        color: Colors.black,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF5494DD)),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                _isSwitchingCamera
-                    ? 'Switching Camera...'
-                    : 'Initializing Camera...',
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-              ),
-            ],
-          ),
-        ),
-      );
+  void _disconnect() {
+    _frameTimer?.cancel();
+    _webSocketChannel?.sink.close();
+    setState(() {
+      _isConnected = false;
+      _connectionStatus = 'Disconnected';
+      _currentExercise = 'No prediction';
+      _confidence = 0.0;
+      _isTargetExercise = false;
+    });
+  }
+
+  Color _getExerciseColor() {
+    if (_targetExercise != null && _isTargetExercise && _confidence > 0.7) {
+      return Colors
+          .green; // Green when target exercise is detected with high confidence
+    } else if (_targetExercise != null && !_isTargetExercise) {
+      return Colors.orange; // Orange when wrong exercise is detected
     }
-
-    return SizedBox.expand(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        child: SizedBox(
-          width: _cameraController!.value.previewSize!.height,
-          height: _cameraController!.value.previewSize!.width,
-          child: CameraPreview(_cameraController!),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOverlay() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.black.withOpacity(0.6),
-            Colors.transparent,
-            Colors.transparent,
-            Colors.black.withOpacity(0.6),
-          ],
-          stops: const [0.0, 0.3, 0.7, 1.0],
-        ),
-      ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            _buildTopOverlay(),
-            const Spacer(),
-            _buildBottomOverlay(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopOverlay() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.black.withOpacity(0.5),
-                ),
-              ),
-              Expanded(
-                child: Center(
-                  child: Text(
-                    widget.exerciseName ?? 'Exercise Recognition',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_availableCameras.length > 1)
-                    IconButton(
-                      onPressed: _isSwitchingCamera ? null : _switchCamera,
-                      icon: Icon(
-                        Icons.flip_camera_ios,
-                        color: _isSwitchingCamera ? Colors.grey : Colors.white,
-                      ),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.black.withOpacity(0.5),
-                      ),
-                      tooltip: 'Switch Camera',
-                    ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _isConnected ? Colors.green : Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      _isConnected ? Icons.wifi : Icons.wifi_off,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildExerciseInfo(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExerciseInfo() {
-    return AnimatedBuilder(
-      animation: _fadeAnimation,
-      builder: (context, child) {
-        return Opacity(
-          opacity: _fadeAnimation.value,
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: _confidence > 0.8 ? Colors.green : Colors.white30,
-                width: 2,
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: _isCapturing ? Colors.green : Colors.grey,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _status,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (_lastPredictionTime != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'Live',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const Divider(color: Colors.white30),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.fitness_center,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _currentExercise,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                if (_confidence > 0) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Text(
-                        'Confidence: ${(_confidence * 100).toStringAsFixed(1)}%',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const Spacer(),
-                      Container(
-                        width: 60,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(2),
-                          color: Colors.white30,
-                        ),
-                        child: FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: _confidence,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(2),
-                              color: _confidence > 0.8
-                                  ? Colors.green
-                                  : _confidence > 0.6
-                                      ? Colors.orange
-                                      : Colors.red,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildBottomOverlay() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.7),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildStatCard('Reps', _repCount.toString(), Icons.fitness_center),
-                _buildStatCard('Time', _getSessionDuration(), Icons.timer),
-                _buildStatCard('FPS', _currentFPS.toString(), Icons.speed),
-                _buildStatCard('Frames', _frameCount.toString(), Icons.camera),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isConnected && !_isCapturing 
-                        ? _startFrameCapture 
-                        : _isCapturing 
-                            ? _stopExerciseRecognition 
-                            : null,
-                    icon: Icon(_isCapturing ? Icons.stop : Icons.play_arrow),
-                    label: Text(_isCapturing ? 'Stop' : 'Start'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _isCapturing ? Colors.red : Colors.green,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isConnected ? null : _connectWebSocket,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Reconnect'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF5494DD),
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard(String label, String value, IconData icon) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: Colors.white, size: 18),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-          ),
-        ),
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white70, fontSize: 10),
-        ),
-      ],
-    );
-  }
-
-  String _getSessionDuration() {
-    if (_sessionStartTime == null) return '0:00';
-    final duration = DateTime.now().difference(_sessionStartTime!);
-    return '${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}';
+    return _exerciseColors[_currentExercise] ?? Colors.grey;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
+      appBar: AppBar(
+        title: Text(
+          _targetExercise != null
+              ? 'Detecting: $_targetExercise'
+              : 'Exercise Detection',
+        ),
+        backgroundColor: _getExerciseColor(),
+        actions: [
+          IconButton(
+            icon: Icon(_isConnected ? Icons.wifi : Icons.wifi_off),
+            onPressed: _toggleConnection,
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Camera Preview
+            Expanded(flex: 3, child: _buildCameraPreview()),
+
+            // Prediction Display
+            Flexible(flex: 1, child: _buildPredictionDisplay()),
+
+            // Status and Controls
+            _buildControls(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCameraPreview() {
+    if (!_isCameraInitialized ||
+        _cameraController == null ||
+        !_cameraController!.value.isInitialized) {
+      return Container(
+        color: Colors.black,
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text(
+                'Initializing Camera...',
+                style: TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      child: ClipRect(
+        child: OverflowBox(
+          alignment: Alignment.center,
+          child: FittedBox(
+            fit: BoxFit.fitWidth,
+            child: SizedBox(
+              width: MediaQuery.of(context).size.width,
+              height:
+                  MediaQuery.of(context).size.width /
+                  _cameraController!.value.aspectRatio,
+              child: CameraPreview(_cameraController!),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPredictionDisplay() {
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 120),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            _getExerciseColor().withOpacity(0.8),
+            _getExerciseColor().withOpacity(0.4),
+          ],
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Target exercise display (if specified)
+            if (_targetExercise != null) ...[
+              Text(
+                'Target: $_targetExercise',
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.white70,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
+
+            // Current prediction
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    _currentExercise,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                if (_targetExercise != null && _isTargetExercise) ...[
+                  const SizedBox(width: 8),
+                  const Icon(Icons.check_circle, color: Colors.white, size: 24),
+                ],
+              ],
+            ),
+
+            const SizedBox(height: 8),
+            Text(
+              'Confidence: ${(_confidence * 100).toStringAsFixed(1)}%',
+              style: const TextStyle(fontSize: 16, color: Colors.white70),
+            ),
+            const SizedBox(height: 12),
+            LinearProgressIndicator(
+              value: _confidence,
+              backgroundColor: Colors.white30,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildControls() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _buildCameraPreview(),
-          _buildOverlay(),
+          // Status
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _isConnected ? Colors.green.shade100 : Colors.red.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _isConnected ? Icons.check_circle : Icons.error,
+                  color: _isConnected ? Colors.green : Colors.red,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _connectionStatus,
+                    style: TextStyle(
+                      color: _isConnected
+                          ? Colors.green.shade800
+                          : Colors.red.shade800,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Control Buttons
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ElevatedButton.icon(
+                    onPressed: _toggleConnection,
+                    icon: Icon(_isConnected ? Icons.stop : Icons.play_arrow),
+                    label: Text(_isConnected ? 'Stop' : 'Start'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isConnected ? Colors.red : Colors.green,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: ElevatedButton.icon(
+                    onPressed:
+                        (_isCameraInitialized &&
+                            _cameraController != null &&
+                            _cameraController!.value.isInitialized)
+                        ? _captureAndSendFrame
+                        : null,
+                    icon: const Icon(Icons.camera),
+                    label: const Text('Capture'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          // Processing indicator
+          if (_isProcessing)
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 8),
+                Text('Processing...'),
+              ],
+            ),
         ],
       ),
     );
