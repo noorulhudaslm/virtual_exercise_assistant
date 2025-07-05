@@ -19,7 +19,6 @@ dependencies:
   shared_preferences: ^2.2.2
   permission_handler: ^11.0.1
   mediapipe_core: ^0.0.1
-  tflite_flutter: ^0.10.4
   web_socket_channel: ^3.0.3
   google_mlkit_pose_detection: ^0.10.0
   google_mlkit_commons: ^0.6.0
@@ -32,6 +31,11 @@ dependencies:
   uuid: ^4.5.1
   intl: ^0.20.2
   cloud_firestore: ^5.6.11
+  ffmpeg_kit_flutter_new: ^2.0.0
+  image_picker: ^1.0.7
+  video_thumbnail: ^0.5.3
+  image: ^4.1.7
+  tflite_flutter: ^0.10.4
 
   
   

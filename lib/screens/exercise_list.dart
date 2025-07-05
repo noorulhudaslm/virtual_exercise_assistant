@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'simple_camera_screen.dart';
+import 'video_analysis_screen.dart';
 import '../widgets/exercise_icons.dart';
 
 class ExerciseListScreen extends StatefulWidget {
@@ -68,7 +69,18 @@ class _ExerciseListScreenState extends State<ExerciseListScreen>
       'name': 'Bench Press',
       'description': 'Chest, shoulders, triceps',
       'color': const Color(0xFF1BFFFF),
-      'icon': BenchPressIcon(controller: _iconController), // Create a new icon
+      'icon': BenchPressIcon(controller: _iconController),
+    },
+    {
+      'name': 'Video Analysis',
+      'description': 'Analyze exercise videos',
+      'color': const Color(0xFFFF6B35),
+      'icon': Icon(
+        Icons.video_library,
+        size: 40,
+        color: const Color(0xFFFF6B35),
+      ),
+      'isVideoAnalysis': true,
     },
   ];
 
@@ -136,7 +148,25 @@ class _ExerciseListScreenState extends State<ExerciseListScreen>
     super.dispose();
   }
 
-  Future<void> _openCamera(String exerciseName) async {
+  Future<void> _openCamera(
+    String exerciseName, {
+    bool isVideoAnalysis = false,
+  }) async {
+    if (isVideoAnalysis) {
+      // Navigate to video analysis screen
+      if (!mounted) return;
+
+      try {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const VideoAnalysisScreen()),
+        );
+      } catch (e) {
+        _showSnackBar('Failed to open video analysis: $e', Colors.red);
+      }
+      return;
+    }
+
     if (!_isCameraInitialized) {
       _showSnackBar(
         _cameraError ?? 'Camera is not initialized yet. Please wait...',
@@ -179,7 +209,7 @@ class _ExerciseListScreenState extends State<ExerciseListScreen>
 
   void _showSnackBar(String message, Color backgroundColor) {
     if (!mounted) return;
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -307,7 +337,10 @@ class _ExerciseListScreenState extends State<ExerciseListScreen>
           borderRadius: BorderRadius.circular(20),
           splashColor: exercise['color'].withOpacity(0.3),
           highlightColor: exercise['color'].withOpacity(0.1),
-          onTap: () => _openCamera(exercise['name']),
+          onTap: () => _openCamera(
+            exercise['name'],
+            isVideoAnalysis: exercise['isVideoAnalysis'] ?? false,
+          ),
           child: Container(
             constraints: const BoxConstraints(minHeight: 80),
             decoration: BoxDecoration(
@@ -329,7 +362,7 @@ class _ExerciseListScreenState extends State<ExerciseListScreen>
                 ),
               ],
               border: Border.all(
-                color: Colors.white.withOpacity(0.2), 
+                color: Colors.white.withOpacity(0.2),
                 width: 1,
               ),
             ),
@@ -357,10 +390,7 @@ class _ExerciseListScreenState extends State<ExerciseListScreen>
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: Colors.white.withOpacity(0.15),
-        border: Border.all(
-          color: exercise['color'].withOpacity(0.5),
-          width: 2,
-        ),
+        border: Border.all(color: exercise['color'].withOpacity(0.5), width: 2),
       ),
       child: Center(child: exercise['icon']),
     );
@@ -406,17 +436,9 @@ class _ExerciseListScreenState extends State<ExerciseListScreen>
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          Icons.camera_alt,
-          size: 18,
-          color: exercise['color'],
-        ),
+        Icon(Icons.camera_alt, size: 18, color: exercise['color']),
         const SizedBox(height: 8),
-        const Icon(
-          Icons.arrow_forward_ios,
-          size: 14,
-          color: Colors.white70,
-        ),
+        const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white70),
       ],
     );
   }

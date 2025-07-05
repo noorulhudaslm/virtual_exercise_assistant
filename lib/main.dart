@@ -12,9 +12,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const VirtualExerciseApp());
 }
 
@@ -41,10 +39,7 @@ class VirtualExerciseApp extends StatelessWidget {
             fontSize: 32,
             fontWeight: FontWeight.bold,
           ),
-          bodyMedium: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-          ),
+          bodyMedium: TextStyle(color: Colors.white, fontSize: 16),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
@@ -57,20 +52,19 @@ class VirtualExerciseApp extends StatelessWidget {
             horizontal: 20,
             vertical: 16,
           ),
-          labelStyle: TextStyle(
-            color: Colors.grey[400],
-          ),
+          labelStyle: TextStyle(color: Colors.grey[400]),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: AppTheme.primaryButton,
         ),
       ),
-      home: const AuthWrapper(), // This handles authentication state and routing
+      home: AuthWrapper(), // This handles authentication state and routing
       routes: {
         '/login': (context) => const LoginSignupScreen(),
         '/signup': (context) => const SignUpScreen(),
         '/intro': (context) => const AppIntroScreen(),
-        '/home': (context) => const HomeScreen(), // Added home route for completeness
+        '/home': (context) =>
+            const HomeScreen(), // Added home route for completeness
       },
     );
   }

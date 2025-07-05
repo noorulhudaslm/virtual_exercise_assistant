@@ -151,7 +151,20 @@ class _MealPlanQueryBuilderState extends State<MealPlanQueryBuilder> {
         style: TextStyle(color: Colors.white),
         decoration: InputDecoration(
           labelText: field.label,
-          border: const OutlineInputBorder(),
+          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+          floatingLabelBehavior: FloatingLabelBehavior.always,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Color(0xFF1BFFFF)),
+          ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 12,
             vertical: 8,
@@ -161,10 +174,14 @@ class _MealPlanQueryBuilderState extends State<MealPlanQueryBuilder> {
             field.enumValues?.map((enumValue) {
               return DropdownMenuItem<Enum>(
                 value: enumValue,
-                child: Text(_getEnumDisplayName(enumValue)),
+                child: Text(
+                  _getEnumDisplayName(enumValue),
+                  style: TextStyle(color: Colors.white),
+                ),
               );
             }).toList() ??
             [],
+        dropdownColor: Colors.black,
         onChanged: (value) {
           setState(() {
             _values[field.key] = value;
@@ -186,8 +203,22 @@ class _MealPlanQueryBuilderState extends State<MealPlanQueryBuilder> {
         style: TextStyle(color: Colors.white),
         decoration: InputDecoration(
           labelText: field.label,
+          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+          floatingLabelBehavior: FloatingLabelBehavior.auto,
           hintText: field.placeholder,
-          border: const OutlineInputBorder(),
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Color(0xFF1BFFFF)),
+          ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 12,
             vertical: 8,
@@ -216,8 +247,22 @@ class _MealPlanQueryBuilderState extends State<MealPlanQueryBuilder> {
 
         decoration: InputDecoration(
           labelText: field.label,
+          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+          floatingLabelBehavior: FloatingLabelBehavior.auto,
           hintText: field.placeholder,
-          border: const OutlineInputBorder(),
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Color(0xFF1BFFFF)),
+          ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 12,
             vertical: 8,
