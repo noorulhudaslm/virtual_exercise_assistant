@@ -33,6 +33,7 @@ allprojects {
         google()
         mavenCentral()
         maven { url 'https://google.bintray.com/mediapipe' }
+        maven { url 'https://jitpack.io' }
        
     }
 }

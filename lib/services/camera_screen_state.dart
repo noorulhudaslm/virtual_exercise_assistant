@@ -10,6 +10,11 @@ import '../../services/exercise_form_detector.dart';
 import '../../utils/pushup_analyzer.dart';
 import '../../utils/pullup_analyzer.dart';
 import '../../utils/benchpress_analyzer.dart';
+import '../../utils/bicepcurl_analyzer.dart';
+import '../../utils/deadlift_analyzer.dart';
+import '../../utils/latpulldown_analyzer.dart';
+import '../../utils/squat_analyzer.dart';
+import '../../utils/triceppushdown_analyzer.dart';
 import '../utils/camera_utils.dart';
 import 'camera_overlays.dart';
 import 'tts_service.dart';
@@ -40,6 +45,11 @@ abstract class CameraScreenState extends State<SimpleCameraScreen>
   bool _isPushUpExercise = false;
   bool _isPullUpExercise = false;
   bool _isBenchPressExercise = false;
+  bool _isBicepCurlExercise = false;
+  bool _isDeadliftExercise = false;
+  bool _isLatPulldownExercise = false;
+  bool _isSquatExercise = false;
+  bool _isTricepPushdownExercise = false;
 
   late TtsService _ttsService;
 
@@ -81,6 +91,17 @@ abstract class CameraScreenState extends State<SimpleCameraScreen>
         exerciseName.contains('pull') || exerciseName.contains('pullup');
     _isBenchPressExercise =
         exerciseName.contains('bench') || exerciseName.contains('benchpress');
+    _isBicepCurlExercise =
+        exerciseName.contains('bicep') || exerciseName.contains('bicepcurl');
+    _isDeadliftExercise =
+        exerciseName.contains('dead') || exerciseName.contains('deadlift');
+    _isLatPulldownExercise =
+        exerciseName.contains('lat') || exerciseName.contains('pulldown');
+    _isSquatExercise =
+        exerciseName.contains('squat') || exerciseName.contains('squats');
+    _isTricepPushdownExercise =
+        exerciseName.contains('tricep') ||
+        exerciseName.contains('triceppushdown');
 
     if (_isPushUpExercise) {
       PushUpAnalyzer.resetSession();
@@ -88,6 +109,16 @@ abstract class CameraScreenState extends State<SimpleCameraScreen>
       PullUpAnalyzer.resetSession();
     } else if (_isBenchPressExercise) {
       BenchPressAnalyzer.resetSession();
+    } else if (_isBicepCurlExercise) {
+      BicepCurlAnalyzer.resetSession();
+    } else if (_isDeadliftExercise) {
+      DeadliftAnalyzer.resetSession();
+    } else if (_isLatPulldownExercise) {
+      LatPulldownAnalyzer.resetSession();
+    } else if (_isSquatExercise) {
+      SquatAnalyzer.resetSession();
+    } else if (_isTricepPushdownExercise) {
+      TricepPushdownAnalyzer.resetSession();
     }
   }
 
@@ -311,6 +342,16 @@ abstract class CameraScreenState extends State<SimpleCameraScreen>
           await _processPullUpImage(inputImage);
         } else if (_isBenchPressExercise) {
           await _processBenchPressImage(inputImage);
+        } else if (_isBicepCurlExercise) {
+          await _processBicepCurlImage(inputImage);
+        } else if (_isDeadliftExercise) {
+          await _processDeadliftImage(inputImage);
+        } else if (_isLatPulldownExercise) {
+          await _processLatPulldownImage(inputImage);
+        } else if (_isSquatExercise) {
+          await _processSquatImage(inputImage);
+        } else if (_isTricepPushdownExercise) {
+          await _processTricepPushDownImage(inputImage);
         } else {
           await _formDetector.processImage(
             inputImage,
@@ -371,6 +412,91 @@ abstract class CameraScreenState extends State<SimpleCameraScreen>
       }
     } catch (e) {
       print('Error in bench-press analysis: $e');
+    }
+  }
+
+  Future<void> _processBicepCurlImage(InputImage inputImage) async {
+    try {
+      final List<Pose> poses = await _poseDetector.processImage(inputImage);
+
+      if (poses.isNotEmpty && mounted) {
+        final pose = poses.first;
+        final analysisResult = BicepCurlAnalyzer.analyzeBicepCurlForm(
+          pose,
+          _updateFeedback,
+          _onRepCountUpdate,
+        );
+      }
+    } catch (e) {
+      print('Error in bicep-curl analysis: $e');
+    }
+  }
+
+  Future<void> _processDeadliftImage(InputImage inputImage) async {
+    try {
+      final List<Pose> poses = await _poseDetector.processImage(inputImage);
+
+      if (poses.isNotEmpty && mounted) {
+        final pose = poses.first;
+        final analysisResult = DeadliftAnalyzer.analyzeDeadliftForm(
+          pose,
+          _updateFeedback,
+          _onRepCountUpdate,
+        );
+      }
+    } catch (e) {
+      print('Error in deadlift analysis: $e');
+    }
+  }
+
+  Future<void> _processLatPulldownImage(InputImage inputImage) async {
+    try {
+      final List<Pose> poses = await _poseDetector.processImage(inputImage);
+
+      if (poses.isNotEmpty && mounted) {
+        final pose = poses.first;
+        final analysisResult = DeadliftAnalyzer.analyzeDeadliftForm(
+          pose,
+          _updateFeedback,
+          _onRepCountUpdate,
+        );
+      }
+    } catch (e) {
+      print('Error in LatPulldown analysis: $e');
+    }
+  }
+
+  Future<void> _processSquatImage(InputImage inputImage) async {
+    try {
+      final List<Pose> poses = await _poseDetector.processImage(inputImage);
+
+      if (poses.isNotEmpty && mounted) {
+        final pose = poses.first;
+        final analysisResult = SquatAnalyzer.analyzeSquatForm(
+          pose,
+          _updateFeedback,
+          _onRepCountUpdate,
+        );
+      }
+    } catch (e) {
+      print('Error in Squat analysis: $e');
+    }
+  }
+
+  Future<void> _processTricepPushDownImage(InputImage inputImage) async {
+    try {
+      final List<Pose> poses = await _poseDetector.processImage(inputImage);
+
+      if (poses.isNotEmpty && mounted) {
+        final pose = poses.first;
+        final analysisResult = TricepPushdownAnalyzer.analyzeTricepPushdownForm(
+          pose,
+          _updateFeedback,
+          _onRepCountUpdate,
+        );
+      }
+    } catch (e) {
+      print('Error in TricepPushdown analysis: $e');
     }
   }
 
@@ -562,6 +688,17 @@ abstract class CameraScreenState extends State<SimpleCameraScreen>
         exerciseName.contains('pull') || exerciseName.contains('pullup');
     _isBenchPressExercise =
         exerciseName.contains('bench') || exerciseName.contains('benchpress');
+    _isBicepCurlExercise =
+        exerciseName.contains('bicep') || exerciseName.contains('bicepcurl');
+    _isDeadliftExercise =
+        exerciseName.contains('dead') || exerciseName.contains('deadlift');
+    _isLatPulldownExercise =
+        exerciseName.contains('lat') || exerciseName.contains('pulldown');
+    _isSquatExercise =
+        exerciseName.contains('squat') || exerciseName.contains('squats');
+    _isTricepPushdownExercise =
+        exerciseName.contains('tricep') ||
+        exerciseName.contains('triceppushdown');
     resetCounter();
     _ttsService.speak("Starting $newExercise");
   }
@@ -723,6 +860,16 @@ abstract class CameraScreenState extends State<SimpleCameraScreen>
       PullUpAnalyzer.resetSession();
     } else if (_isBenchPressExercise) {
       BenchPressAnalyzer.resetSession();
+    } else if (_isBicepCurlExercise) {
+      BicepCurlAnalyzer.resetSession();
+    } else if (_isDeadliftExercise) {
+      DeadliftAnalyzer.resetSession();
+    } else if (_isLatPulldownExercise) {
+      LatPulldownAnalyzer.resetSession();
+    } else if (_isSquatExercise) {
+      SquatAnalyzer.resetSession();
+    } else if (_isTricepPushdownExercise) {
+      TricepPushdownAnalyzer.resetSession();
     }
 
     _ttsService.speak("Session reset");
