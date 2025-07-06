@@ -10,6 +10,7 @@ import '../screens/help_support.dart';
 import '../screens/exercise_list.dart';
 import '../screens/homepage.dart';
 import '../screens/diet_plan.dart';
+import '../screens/workout_plan.dart';
 
 class AppDrawer extends StatelessWidget {
   @override
@@ -157,6 +158,20 @@ class AppDrawer extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (context) => const DietPlan(),
+                        ),
+                      );
+                    },
+                  ),
+                  _buildDrawerItem(
+                    context,
+                    Icons.fitness_center,
+                    'Workout Plan',
+                    () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const WorkoutPlan(),
                         ),
                       );
                     },

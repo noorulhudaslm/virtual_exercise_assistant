@@ -1,0 +1,929 @@
+VIRTUAL EXERCISE ASSISTANT - CODEBASE DOCUMENTATION
+====================================================
+
+This document provides a comprehensive overview of all classes, their attributes, and methods in the Virtual Exercise Assistant Flutter application. This is designed to help software architects understand the internal structure, data models, and behaviors of the codebase.
+
+TABLE OF CONTENTS
+=================
+1. Main Application Classes
+2. Authentication Classes
+3. Screen Classes
+4. Service Classes
+5. Utility Classes
+6. Configuration Classes
+7. Widget Classes
+8. Data Models and Enums
+
+================================================================================
+1. MAIN APPLICATION CLASSES
+================================================================================
+
+class VirtualExerciseApp
+------------------------
+Location: lib/main.dart
+Type: StatelessWidget
+Description: Main application entry point and configuration
+
+Attributes:
+- None (StatelessWidget)
+
+Methods:
+- build(BuildContext context) -> Widget
+  Description: Builds the main MaterialApp with theme configuration, routes, and authentication wrapper
+
+class AuthWrapper
+----------------
+Location: lib/auth/auth_wrapper.dart
+Type: StatelessWidget
+Description: Handles authentication state and routing
+
+Attributes:
+- None (StatelessWidget)
+
+Methods:
+- build(BuildContext context) -> Widget
+  Description: StreamBuilder that listens to Firebase auth state changes and routes to appropriate screens
+
+================================================================================
+2. AUTHENTICATION CLASSES
+================================================================================
+
+class AuthServices
+-----------------
+Location: lib/auth/auth_services.dart
+Type: Service Class
+Description: Comprehensive authentication service using Firebase Auth with secure storage
+
+Attributes:
+- final FirebaseAuth _firebaseAuth = FirebaseAuth.instance
+- static const _secureStorage = FlutterSecureStorage(...)
+- static const String _emailKey = 'saved_email'
+- static const String _passwordKey = 'saved_password'
+- static const String _rememberMeKey = 'remember_me'
+
+Properties:
+- Stream<User?> get authStateChanges
+- User? get currentUser
+- String? get displayName
+- bool get isLoggedIn
+- bool get isEmailVerified
+
+Methods:
+- String _getUsernameFromEmail(String email) -> String
+  Description: Extracts username from email address
+
+- Future<void> saveLoginCredentials(String email, String password) -> void
+  Description: Securely saves login credentials using FlutterSecureStorage
+
+- Future<Map<String, String?>> getSavedCredentials() -> Map<String, String?>
+  Description: Retrieves saved login credentials
+
+- Future<bool> hasRememberMe() -> bool
+  Description: Checks if "remember me" is enabled
+
+- Future<void> clearSavedCredentials() -> void
+  Description: Clears all saved credentials
+
+- Future<User?> signUpWithEmail(String email, String password, {String? displayName}) -> User?
+  Description: Creates new user account and sends verification email
+
+- Future<void> resendVerificationEmail() -> void
+  Description: Resends email verification
+
+- Future<bool> checkEmailVerification() -> bool
+  Description: Checks if user's email is verified
+
+- Future<User?> signInWithEmail(String email, String password, {bool requireVerification = true, bool rememberMe = false}) -> User?
+  Description: Signs in user with email/password and handles verification
+
+- Future<User?> autoSignIn() -> User?
+  Description: Automatically signs in using saved credentials
+
+- Future<void> updateDisplayName(String name) -> void
+  Description: Updates user's display name
+
+- Future<bool> changePassword(String currentPassword, String newPassword) -> bool
+  Description: Changes user password with re-authentication
+
+- Future<bool> signOut({bool clearRememberedCredentials = false}) -> bool
+  Description: Signs out user and optionally clears saved credentials
+
+- Future<void> resetPassword(String email) -> void
+  Description: Sends password reset email
+
+- String getDisplayNameWithFallback() -> String
+  Description: Gets display name with fallback to email username
+
+- Future<bool> deleteAccount(String password) -> bool
+  Description: Deletes user account with re-authentication
+
+- Future<bool> reauthenticateWithPassword(String password) -> bool
+  Description: Re-authenticates user for sensitive operations
+
+- String _handleFirebaseAuthException(FirebaseAuthException e) -> String
+  Description: Converts Firebase exceptions to user-friendly messages
+
+================================================================================
+3. SCREEN CLASSES
+================================================================================
+
+class AppIntroScreen
+-------------------
+Location: lib/screens/app_intro_screen.dart
+Type: StatefulWidget
+Description: Main app introduction screen with feature overview
+
+Attributes:
+- bool _isLoading = true
+- String _username = "User"
+- final AuthServices _authServices = AuthServices()
+
+Methods:
+- initState() -> void
+  Description: Initializes screen and loads username
+
+- Future<void> _loadUsername() -> void
+  Description: Loads username from multiple sources (Firebase, SharedPreferences)
+
+- build(BuildContext context) -> Widget
+  Description: Builds the main app interface with gradient background
+
+- Widget _buildFeatureItem(IconData icon, String title, String description) -> Widget
+  Description: Builds individual feature items
+
+- Widget _buildExerciseDetectionItem(BuildContext context) -> Widget
+  Description: Builds exercise detection feature item
+
+- Widget _buildStartButton(BuildContext context) -> Widget
+  Description: Builds the start workout button
+
+class WorkoutPlan
+----------------
+Location: lib/screens/workout_plan.dart
+Type: StatefulWidget
+Description: Workout plan generator screen with API integration
+
+Attributes:
+- List<dynamic>? _workouts
+- WorkoutPlanQueryResult? _queryResult
+- bool _isLoading = false
+- bool _shouldReset = false
+- static const String _apiKey = 'YOUR_API_KEY_HERE'
+- final List<WorkoutPlanFieldConfig> _fieldConfigs
+
+Methods:
+- void _onQueryChanged(WorkoutPlanQueryResult result) -> void
+  Description: Handles query form changes
+
+- Future<void> generateWorkoutPlan() -> void
+  Description: Generates workout plan via API with proper headers
+
+- void _resetForm() -> void
+  Description: Resets the form and results
+
+- build(BuildContext context) -> Widget
+  Description: Builds the workout plan generator interface
+
+class DietPlan
+--------------
+Location: lib/screens/diet_plan.dart
+Type: StatefulWidget
+Description: Diet plan generator screen with meal planning
+
+Attributes:
+- List<dynamic>? _meals
+- MealPlanQueryResult? _queryResult
+- bool _isLoading = false
+- bool _shouldReset = false
+- final List<MealPlanFieldConfig> _fieldConfigs
+
+Methods:
+- void _onQueryChanged(MealPlanQueryResult result) -> void
+  Description: Handles meal plan query changes
+
+- Future<void> fetchBmi() -> void
+  Description: Fetches meal plan from Spoonacular API
+
+- void _resetForm() -> void
+  Description: Resets the form and results
+
+- build(BuildContext context) -> Widget
+  Description: Builds the diet plan generator interface
+
+class VideoAnalysisScreen
+-------------------------
+Location: lib/screens/video_analysis_screen.dart
+Type: StatefulWidget
+Description: Video analysis screen for exercise form detection
+
+Attributes:
+- List<VideoProcessingResult> _results = []
+- bool _isProcessing = false
+- String _statusMessage = ''
+- double _progress = 0.0
+- final VideoProcessor _videoProcessor = VideoProcessor()
+- String? _selectedVideoPath
+
+Methods:
+- Future<void> _pickVideo() -> void
+  Description: Picks video file from device
+
+- Future<void> _processVideo() -> void
+  Description: Processes selected video for exercise analysis
+
+- Future<void> _saveResults() -> void
+  Description: Saves analysis results
+
+- build(BuildContext context) -> Widget
+  Description: Builds the video analysis interface
+
+class ExerciseListScreen
+------------------------
+Location: lib/screens/exercise_list.dart
+Type: StatefulWidget
+Description: List of available exercises with navigation
+
+Attributes:
+- List<Map<String, dynamic>> _exercises = []
+- bool _isLoading = false
+
+Methods:
+- Future<void> _loadExercises() -> void
+  Description: Loads available exercises
+
+- void _navigateToExercise(String exerciseName) -> void
+  Description: Navigates to specific exercise screen
+
+- build(BuildContext context) -> Widget
+  Description: Builds the exercise list interface
+
+class Settings
+--------------
+Location: lib/screens/settings.dart
+Type: StatefulWidget
+Description: App settings and user preferences
+
+Attributes:
+- final AuthServices _authServices = AuthServices()
+- bool _isLoading = false
+- String _currentPassword = ''
+- String _newPassword = ''
+- String _confirmPassword = ''
+
+Methods:
+- Future<void> _changePassword() -> void
+  Description: Changes user password
+
+- Future<void> _deleteAccount() -> void
+  Description: Deletes user account
+
+- Future<void> _signOut() -> void
+  Description: Signs out user
+
+- build(BuildContext context) -> Widget
+  Description: Builds the settings interface
+
+================================================================================
+4. SERVICE CLASSES
+================================================================================
+
+class VideoProcessor
+-------------------
+Location: lib/services/video_processor.dart
+Type: Service Class
+Description: Handles video processing, frame extraction, and exercise detection
+
+Attributes:
+- final PoseDetector _poseDetector = PoseDetector(...)
+- bool _isProcessing = false
+- bool _isCancelled = false
+- final StreamController<VideoProcessingResult> _resultsController
+- final StreamController<double> _progressController
+- static const int targetFPS = 3
+- static const int maxFrameWidth = 640
+- static const int maxFrameHeight = 480
+- final List<String> exerciseNames = BackendConfig.exerciseNames
+
+Properties:
+- Stream<VideoProcessingResult> get resultsStream
+- Stream<double> get progressStream
+- bool get isProcessing
+
+Methods:
+- Future<void> initialize() -> void
+  Description: Initializes video processor and checks backend availability
+
+- Future<List<VideoProcessingResult>> processVideoFromPath(String videoPath, {Function(String)? onStatusUpdate, bool useFormDetection = false}) -> List<VideoProcessingResult>
+  Description: Processes video file and returns exercise detection results
+
+- Future<Map<String, dynamic>> _getVideoInfo(String videoPath) -> Map<String, dynamic>
+  Description: Gets video metadata using FFmpeg
+
+- double _parseFPS(String fpsString) -> double
+  Description: Parses FPS string to double value
+
+- Future<List<String>> _extractFrames(String videoPath, double duration, double fps, Function(String)? onStatusUpdate) -> List<String>
+  Description: Extracts frames from video using FFmpeg
+
+- Future<VideoProcessingResult?> _processFrame(String framePath, int frameNumber, bool useFormDetection) -> VideoProcessingResult?
+  Description: Processes individual frame for exercise detection
+
+- Future<Map<String, dynamic>?> _sendFrameToBackend(Uint8List imageBytes) -> Map<String, dynamic>?
+  Description: Sends frame to backend for AI classification
+
+- Map<String, dynamic> _makeFallbackPrediction(Pose pose) -> Map<String, dynamic>
+  Description: Makes fallback prediction when backend is unavailable
+
+- Future<Map<String, dynamic>?> _getFormFeedback(Pose pose, String exerciseName) -> Map<String, dynamic>?
+  Description: Gets form feedback for detected exercise
+
+- void cancelProcessing() -> void
+  Description: Cancels ongoing video processing
+
+- Future<void> cleanup() -> void
+  Description: Cleans up resources and closes streams
+
+- Map<String, dynamic> getExerciseSummary(List<VideoProcessingResult> results) -> Map<String, dynamic>
+  Description: Generates summary of exercise detection results
+
+class BMICalculator
+------------------
+Location: lib/services/bmi_calculator.dart
+Type: StatefulWidget
+Description: BMI calculation service with health recommendations
+
+Attributes:
+- final TextEditingController _heightController = TextEditingController()
+- final TextEditingController _weightController = TextEditingController()
+- double? _bmi
+- String _bmiCategory = ''
+- String _healthAdvice = ''
+
+Methods:
+- void _calculateBMI() -> void
+  Description: Calculates BMI and determines category
+
+- String _getBMICategory(double bmi) -> String
+  Description: Determines BMI category
+
+- String _getHealthAdvice(String category) -> String
+  Description: Provides health advice based on BMI category
+
+- build(BuildContext context) -> Widget
+  Description: Builds the BMI calculator interface
+
+class CalorieCounter
+-------------------
+Location: lib/services/calorie_counter.dart
+Type: StatefulWidget
+Description: Calorie counting service with food database
+
+Attributes:
+- final TextEditingController _searchController = TextEditingController()
+- List<Map<String, dynamic>> _searchResults = []
+- List<Map<String, dynamic>> _selectedFoods = []
+- double _totalCalories = 0.0
+- bool _isLoading = false
+
+Methods:
+- Future<void> _searchFood(String query) -> void
+  Description: Searches for food items
+
+- void _addFood(Map<String, dynamic> food) -> void
+  Description: Adds food to daily intake
+
+- void _removeFood(int index) -> void
+  Description: Removes food from daily intake
+
+- void _calculateTotalCalories() -> void
+  Description: Calculates total daily calories
+
+- build(BuildContext context) -> Widget
+  Description: Builds the calorie counter interface
+
+class ExerciseFormDetector
+-------------------------
+Location: lib/services/exercise_form_detector.dart
+Type: Service Class
+Description: Real-time exercise form detection and feedback
+
+Attributes:
+- final Function(String, Color) onFeedbackUpdate
+- final Function(int) onRepCountUpdate
+- String initialExercise
+- PoseDetector _poseDetector
+- bool _isDetecting = false
+- int _repCount = 0
+
+Methods:
+- Future<void> startDetection() -> void
+  Description: Starts real-time form detection
+
+- void stopDetection() -> void
+  Description: Stops form detection
+
+- Future<void> _processPose(Pose pose) -> void
+  Description: Processes pose for form analysis
+
+- String _analyzeForm(Pose pose, String exercise) -> String
+  Description: Analyzes exercise form and provides feedback
+
+- void _updateRepCount() -> void
+  Description: Updates repetition count
+
+class ExerciseHistoryService
+----------------------------
+Location: lib/services/exercise_history_service.dart
+Type: Service Class
+Description: Manages exercise history and statistics
+
+Attributes:
+- final FirebaseFirestore _firestore = FirebaseFirestore.instance
+- final String _collectionName = 'exercise_history'
+
+Methods:
+- Future<void> saveExerciseSession(Map<String, dynamic> sessionData) -> void
+  Description: Saves exercise session to Firestore
+
+- Future<List<Map<String, dynamic>>> getExerciseHistory() -> List<Map<String, dynamic>>
+  Description: Retrieves exercise history from Firestore
+
+- Future<Map<String, dynamic>> getStatistics() -> Map<String, dynamic>
+  Description: Calculates exercise statistics
+
+- Future<void> deleteSession(String sessionId) -> void
+  Description: Deletes specific exercise session
+
+class ChangePassword
+-------------------
+Location: lib/services/change_password.dart
+Type: StatefulWidget
+Description: Password change functionality
+
+Attributes:
+- final TextEditingController _currentPasswordController = TextEditingController()
+- final TextEditingController _newPasswordController = TextEditingController()
+- final TextEditingController _confirmPasswordController = TextEditingController()
+- final AuthServices _authServices = AuthServices()
+- bool _isLoading = false
+
+Methods:
+- Future<void> _changePassword() -> void
+  Description: Changes user password
+
+- bool _validatePasswords() -> bool
+  Description: Validates password inputs
+
+- build(BuildContext context) -> Widget
+  Description: Builds the password change interface
+
+================================================================================
+5. UTILITY CLASSES
+================================================================================
+
+class WorkoutPlanQueryBuilder
+----------------------------
+Location: lib/utils/workout_plan_query_builder.dart
+Type: StatefulWidget
+Description: Dynamic form builder for workout plan queries
+
+Attributes:
+- final List<WorkoutPlanFieldConfig> fields
+- final Function(WorkoutPlanQueryResult) onQueryChanged
+- final EdgeInsetsGeometry? padding
+- final double? spacing
+- final VoidCallback? onReset
+- final Map<String, dynamic> _values = {}
+- final Map<String, TextEditingController> _controllers = {}
+- final Map<String, GlobalKey<FormState>> _formKeys = {}
+
+Methods:
+- void resetForm() -> void
+  Description: Resets the form to initial state
+
+- void initState() -> void
+  Description: Initializes form with default values
+
+- void didUpdateWidget(WorkoutPlanQueryBuilder oldWidget) -> void
+  Description: Handles widget updates
+
+- void _initializeValues() -> void
+  Description: Initializes form field values
+
+- void dispose() -> void
+  Description: Disposes of controllers
+
+- void _notifyQueryChanged() -> void
+  Description: Notifies parent of query changes
+
+- bool _validateForm() -> bool
+  Description: Validates form fields
+
+- Widget _buildField(WorkoutPlanFieldConfig field) -> Widget
+  Description: Builds individual form fields
+
+- Widget _buildEnumDropdown(WorkoutPlanFieldConfig field) -> Widget
+  Description: Builds dropdown field
+
+- Widget _buildTextInput(WorkoutPlanFieldConfig field) -> Widget
+  Description: Builds text input field
+
+- Widget _buildNumberInput(WorkoutPlanFieldConfig field) -> Widget
+  Description: Builds number input field
+
+- String _getEnumDisplayName(Enum enumValue) -> String
+  Description: Gets display name for enum values
+
+- build(BuildContext context) -> Widget
+  Description: Builds the query form
+
+class MealPlanQueryBuilder
+-------------------------
+Location: lib/utils/meal_plan_query_builder.dart
+Type: StatefulWidget
+Description: Dynamic form builder for meal plan queries
+
+Attributes:
+- final List<MealPlanFieldConfig> fields
+- final Function(MealPlanQueryResult) onQueryChanged
+- final EdgeInsetsGeometry? padding
+- final double? spacing
+- final VoidCallback? onReset
+- final Map<String, dynamic> _values = {}
+- final Map<String, TextEditingController> _controllers = {}
+- final Map<String, GlobalKey<FormState>> _formKeys = {}
+
+Methods:
+- void resetForm() -> void
+  Description: Resets the form to initial state
+
+- void initState() -> void
+  Description: Initializes form with default values
+
+- void didUpdateWidget(MealPlanQueryBuilder oldWidget) -> void
+  Description: Handles widget updates
+
+- void _initializeValues() -> void
+  Description: Initializes form field values
+
+- void dispose() -> void
+  Description: Disposes of controllers
+
+- void _notifyQueryChanged() -> void
+  Description: Notifies parent of query changes
+
+- bool _validateForm() -> bool
+  Description: Validates form fields
+
+- Widget _buildField(MealPlanFieldConfig field) -> Widget
+  Description: Builds individual form fields
+
+- Widget _buildEnumDropdown(MealPlanFieldConfig field) -> Widget
+  Description: Builds dropdown field
+
+- Widget _buildTextInput(MealPlanFieldConfig field) -> Widget
+  Description: Builds text input field
+
+- Widget _buildNumberInput(MealPlanFieldConfig field) -> Widget
+  Description: Builds number input field
+
+- String _getEnumDisplayName(Enum enumValue) -> String
+  Description: Gets display name for enum values
+
+- build(BuildContext context) -> Widget
+  Description: Builds the query form
+
+class VideoFrameExtractor
+-------------------------
+Location: lib/utils/video_frame_extractor.dart
+Type: Service Class
+Description: Extracts frames from video files using FFmpeg
+
+Attributes:
+- static const int targetFPS = 3
+- static const int maxFrameWidth = 640
+- static const int maxFrameHeight = 480
+
+Methods:
+- Future<List<String>> extractFrames(String videoPath, {Function(String)? onStatusUpdate}) -> List<String>
+  Description: Extracts frames from video file
+
+- Future<Map<String, dynamic>> getVideoInfo(String videoPath) -> Map<String, dynamic>
+  Description: Gets video metadata
+
+- double _parseFPS(String fpsString) -> double
+  Description: Parses FPS string
+
+class PullupAnalyzer
+-------------------
+Location: lib/utils/pullup_analyzer.dart
+Type: Service Class
+Description: Analyzes pull-up exercise form
+
+Attributes:
+- final Function(String, Color) onFeedbackUpdate
+- final Function(int) onRepCountUpdate
+- int _repCount = 0
+- bool _isInUpPosition = false
+
+Methods:
+- void analyzePose(Pose pose) -> void
+  Description: Analyzes pull-up pose
+
+- bool _isInPullUpPosition(Pose pose) -> bool
+  Description: Checks if user is in pull-up position
+
+- bool _isInDownPosition(Pose pose) -> bool
+  Description: Checks if user is in down position
+
+- String _getFormFeedback(Pose pose) -> String
+  Description: Provides form feedback
+
+class PushupAnalyzer
+-------------------
+Location: lib/utils/pushup_analyzer.dart
+Type: Service Class
+Description: Analyzes push-up exercise form
+
+Attributes:
+- final Function(String, Color) onFeedbackUpdate
+- final Function(int) onRepCountUpdate
+- int _repCount = 0
+- bool _isInUpPosition = false
+
+Methods:
+- void analyzePose(Pose pose) -> void
+  Description: Analyzes push-up pose
+
+- bool _isInPushUpPosition(Pose pose) -> bool
+  Description: Checks if user is in push-up position
+
+- bool _isInDownPosition(Pose pose) -> bool
+  Description: Checks if user is in down position
+
+- String _getFormFeedback(Pose pose) -> String
+  Description: Provides form feedback
+
+================================================================================
+6. CONFIGURATION CLASSES
+================================================================================
+
+class BackendConfig
+------------------
+Location: lib/config/backend_config.dart
+Type: Configuration Class
+Description: Backend API configuration and endpoints
+
+Attributes:
+- static const String baseUrl = 'http://192.168.1.5:5000'
+- static const String predictEndpoint = '$baseUrl/predict'
+- static const String healthEndpoint = '$baseUrl/health'
+- static const String wsUrl = 'ws://192.168.1.195:8000'
+- static const int requestTimeout = 10
+- static const int healthCheckTimeout = 5
+- static const List<String> exerciseNames = [...]
+- static const Map<String, String> defaultHeaders = {...}
+- static const String predictionType = 'prediction'
+- static const String dataKey = 'data'
+- static const String classKey = 'class'
+- static const String labelKey = 'label'
+- static const String confidenceKey = 'confidence'
+- static const String allPredictionsKey = 'all_predictions'
+
+Methods:
+- None (Configuration class with static constants)
+
+class AppTheme
+--------------
+Location: lib/theme/app_theme.dart
+Type: Theme Configuration
+Description: Application theme configuration
+
+Attributes:
+- static const Color primaryColor = Color(0xFF5494DD)
+- static const Color secondaryColor = Color(0xFF1BFFFF)
+- static const Color backgroundColor = Color(0xFF2E3192)
+
+Methods:
+- static ButtonStyle get primaryButton
+  Description: Returns primary button style
+
+- static ButtonStyle get secondaryButton
+  Description: Returns secondary button style
+
+================================================================================
+7. WIDGET CLASSES
+================================================================================
+
+class AppDrawer
+--------------
+Location: lib/drawer/app_drawer.dart
+Type: StatelessWidget
+Description: Main application drawer with navigation
+
+Attributes:
+- None (StatelessWidget)
+
+Methods:
+- build(BuildContext context) -> Widget
+  Description: Builds the app drawer with navigation items
+
+- Widget _buildSectionHeader(String title) -> Widget
+  Description: Builds section headers
+
+- Widget _buildDrawerItem(BuildContext context, IconData icon, String title, VoidCallback onTap, {bool isLogout = false}) -> Widget
+  Description: Builds individual drawer items
+
+- void _showChangePasswordDialog(BuildContext context) -> void
+  Description: Shows password change dialog
+
+- void _showLogoutDialog(BuildContext context) -> void
+  Description: Shows logout confirmation dialog
+
+- void _showErrorSnackBar(BuildContext context, String message) -> void
+  Description: Shows error snackbar
+
+- void _showSuccessSnackBar(BuildContext context, String message) -> void
+  Description: Shows success snackbar
+
+- void _showAllExercises(BuildContext context) -> void
+  Description: Shows supported exercises dialog
+
+- void _showComingSoon(BuildContext context, String feature) -> void
+  Description: Shows coming soon message
+
+class _ExerciseItem
+------------------
+Location: lib/drawer/app_drawer.dart
+Type: StatelessWidget
+Description: Individual exercise item widget
+
+Attributes:
+- final String text
+
+Methods:
+- build(BuildContext context) -> Widget
+  Description: Builds exercise item display
+
+================================================================================
+8. DATA MODELS AND ENUMS
+================================================================================
+
+class VideoProcessingResult
+---------------------------
+Location: lib/services/video_processor.dart
+Type: Data Model
+Description: Result of video frame processing
+
+Attributes:
+- final int frameNumber
+- final String? exerciseName
+- final double confidence
+- final String? formFeedback
+- final Color feedbackColor
+- final DateTime timestamp
+
+Methods:
+- Constructor with required parameters
+
+class WorkoutPlanFieldConfig
+----------------------------
+Location: lib/utils/workout_plan_query_builder.dart
+Type: Data Model
+Description: Configuration for workout plan form fields
+
+Attributes:
+- final String label
+- final String key
+- final FieldType type
+- final List<Enum>? enumValues
+- final String? placeholder
+- final TextInputType? inputType
+- final bool isRequired
+- final dynamic defaultValue
+
+Methods:
+- Constructor with required parameters
+
+class MealPlanFieldConfig
+-------------------------
+Location: lib/utils/meal_plan_query_builder.dart
+Type: Data Model
+Description: Configuration for meal plan form fields
+
+Attributes:
+- final String label
+- final String key
+- final FieldType type
+- final List<Enum>? enumValues
+- final String? placeholder
+- final TextInputType? inputType
+- final bool isRequired
+- final dynamic defaultValue
+
+Methods:
+- Constructor with required parameters
+
+class WorkoutPlanQueryResult
+----------------------------
+Location: lib/utils/workout_plan_query_builder.dart
+Type: Data Model
+Description: Result of workout plan query
+
+Attributes:
+- final Map<String, dynamic> values
+- final bool isValid
+
+Methods:
+- Constructor with required parameters
+
+class MealPlanQueryResult
+-------------------------
+Location: lib/utils/meal_plan_query_builder.dart
+Type: Data Model
+Description: Result of meal plan query
+
+Attributes:
+- final Map<String, dynamic> values
+- final bool isValid
+
+Methods:
+- Constructor with required parameters
+
+ENUMS
+-----
+
+enum ExerciseMuscleGroup
+Location: lib/utils/muscle_groups.dart
+Values: abdominals, abductors, adductors, biceps, calves, chest, forearms, glutes, hamstrings, lats, lower_back, middle_back, neck, quadriceps, traps, triceps
+
+enum ExerciseType
+Location: lib/utils/muscle_groups.dart
+Values: cardio, olympic_weightlifting, plyometrics, powerlifting, strength, stretching, strongman
+
+enum ExerciseDifficulty
+Location: lib/utils/muscle_groups.dart
+Values: beginner, intermediate, expert
+
+enum DietType
+Location: lib/utils/diet_plan_types.dart
+Values: vegetarian, vegan, ketogenic, paleo, glutenfree, pescetarian, primal, lowfodmap, whole30
+
+enum TimeFrame
+Location: lib/utils/time_frame.dart
+Values: daily, weekly
+
+enum FieldType
+Location: lib/utils/workout_plan_query_builder.dart, lib/utils/meal_plan_query_builder.dart
+Values: enumDropdown, textInput, numberInput
+
+================================================================================
+ARCHITECTURE OVERVIEW
+================================================================================
+
+The Virtual Exercise Assistant follows a layered architecture pattern:
+
+1. PRESENTATION LAYER
+   - Screen classes (lib/screens/)
+   - Widget classes (lib/widgets/, lib/drawer/)
+   - Theme configuration (lib/theme/)
+
+2. BUSINESS LOGIC LAYER
+   - Service classes (lib/services/)
+   - Authentication services (lib/auth/)
+   - Form builders (lib/utils/)
+
+3. DATA LAYER
+   - Configuration classes (lib/config/)
+   - Data models and enums (lib/utils/)
+   - Firebase integration
+
+4. EXTERNAL INTEGRATIONS
+   - Firebase Authentication
+   - Firebase Firestore
+   - FFmpeg for video processing
+   - Google ML Kit for pose detection
+   - External APIs (Spoonacular, workout APIs)
+
+KEY DESIGN PATTERNS:
+- Service Layer Pattern: Business logic separated into service classes
+- Repository Pattern: Data access abstracted through service classes
+- Observer Pattern: Stream-based updates for real-time processing
+- Factory Pattern: Dynamic form builders for different query types
+- Strategy Pattern: Different analyzers for different exercises
+
+DEPENDENCIES:
+- Flutter Framework
+- Firebase (Auth, Firestore)
+- FFmpeg Kit Flutter
+- Google ML Kit
+- HTTP package for API calls
+- Shared Preferences for local storage
+- Flutter Secure Storage for sensitive data
+
+This architecture provides:
+- Separation of concerns
+- Testability
+- Maintainability
+- Scalability
+- Reusability of components 
