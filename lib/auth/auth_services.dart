@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../services/change_password.dart';
 
 class AuthServices {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;

@@ -1,17 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../services/bmi_calculator.dart';
-import '../services/calorie_counter.dart';
+import 'package:flutter/gestures.dart';
+import 'package:camera/camera.dart';
+import '../screens/bmi_calculator.dart';
+import '../screens/calorie_counter.dart';
 import '../screens/camera_screen_for_ai_recognition.dart';
 import '../screens/settings.dart';
 import '../screens/app_intro_screen.dart';
 import '../auth/auth_services.dart';
 import '../screens/help_support.dart';
 import '../screens/exercise_list.dart';
-import '../screens/homepage.dart';
+import '../screens/workout_plan.dart';
 import '../screens/diet_plan.dart';
+import '../screens/exercise_history.dart';
+import '../screens/video_analysis_screen.dart';
+import '../services/change_password.dart' as change_password_service;
+import '../screens/camera_screen_for_ai_recognition.dart';
 
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends StatefulWidget {
+  @override
+  _AppDrawerState createState() => _AppDrawerState();
+}
+
+class _AppDrawerState extends State<AppDrawer> {
+  bool _isLoading = false;
+  final AuthServices _auth = AuthServices();
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
@@ -28,16 +42,16 @@ class AppDrawer extends StatelessWidget {
         ),
         child: Column(
           children: [
-            // Custom Drawer Header - Fixed height with proper padding
+            // Custom Drawer Header
             Container(
-              height: 120, // Increased height
+              height: 120,
               width: double.infinity,
               padding: const EdgeInsets.only(
                 left: 16,
                 right: 16,
                 top: 40,
                 bottom: 20,
-              ), // Added top padding for status bar
+              ),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -49,8 +63,7 @@ class AppDrawer extends StatelessWidget {
                 ),
               ),
               child: Align(
-                alignment: Alignment
-                    .centerLeft, // Changed from bottomLeft to centerLeft
+                alignment: Alignment.centerLeft,
                 child: ShaderMask(
                   shaderCallback: (bounds) => const LinearGradient(
                     colors: [Colors.white, Color(0xFF1BFFFF)],
@@ -59,7 +72,7 @@ class AppDrawer extends StatelessWidget {
                     'VEA',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 30, // Increased font size
+                      fontSize: 30,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 5,
                     ),
@@ -90,12 +103,7 @@ class AppDrawer extends StatelessWidget {
                     'Start Workout',
                     () {
                       Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ExerciseListScreen(),
-                        ),
-                      );
+                      _showExerciseOptionsDialog(context);
                     },
                   ),
                   _buildDrawerItem(
@@ -113,7 +121,12 @@ class AppDrawer extends StatelessWidget {
                     'Workout History',
                     () {
                       Navigator.pop(context);
-                      _showComingSoon(context, 'Workout History');
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ExerciseHistoryScreen(),
+                        ),
+                      );
                     },
                   ),
 
@@ -161,6 +174,20 @@ class AppDrawer extends StatelessWidget {
                       );
                     },
                   ),
+                  _buildDrawerItem(
+                    context,
+                    Icons.fitness_center,
+                    'Workout Plan',
+                    () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const WorkoutPlan(),
+                        ),
+                      );
+                    },
+                  ),
 
                   // Settings Section
                   _buildSectionHeader('MORE'),
@@ -172,7 +199,7 @@ class AppDrawer extends StatelessWidget {
                     );
                   }),
                   _buildDrawerItem(context, Icons.help, 'Help & Support', () {
-                    Navigator.pop(context); // Close the drawer first
+                    Navigator.pop(context);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -181,29 +208,14 @@ class AppDrawer extends StatelessWidget {
                     );
                   }),
 
-                  // Add Change Password option
+                  // Change Password option
                   _buildDrawerItem(context, Icons.lock, 'Change Password', () {
                     Navigator.pop(context);
                     _showChangePasswordDialog(context);
                   }),
 
                   // Divider
-                  Container(
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    height: 1,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.transparent,
-                          Colors.white.withOpacity(0.3),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
-                  ),
+                  _buildDivider(),
 
                   // Logout
                   _buildDrawerItem(
@@ -214,7 +226,6 @@ class AppDrawer extends StatelessWidget {
                     isLogout: true,
                   ),
 
-                  // Add bottom padding to prevent overflow
                   const SizedBox(height: 25),
                 ],
               ),
@@ -223,6 +234,249 @@ class AppDrawer extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildDivider() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      height: 1,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.transparent,
+            Colors.white.withOpacity(0.3),
+            Colors.transparent,
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showExerciseOptionsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 40),
+          child: Container(
+            constraints: const BoxConstraints(maxHeight: 700, maxWidth: 400),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF4A5FBF), Color(0xFF3B4FB8)],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Choose Your\nWorkout Method',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        height: 1.2,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Select exercises from our curated list, use AI recognition, or upload a video for analysis.',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 14,
+                        height: 1.3,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    _buildExerciseOptionButton(
+                      context,
+                      'Browse Exercise List',
+                      Icons.list_alt,
+                      [Color(0xFF5494DD), Color(0xFF4A84C7)],
+                      () {
+                        Navigator.of(context).pop();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ExerciseListScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _buildExerciseOptionButton(
+                      context,
+                      'Use AI Recognition',
+                      Icons.camera_alt,
+                      [Color(0xFF00E5FF), Color(0xFF00B8CC)],
+                      () {
+                        Navigator.of(context).pop();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CameraScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _buildExerciseOptionButton(
+                      context,
+                      'Upload Video Analysis',
+                      Icons.video_library,
+                      [Color.fromARGB(255, 109, 149, 209), Color.fromARGB(255, 84, 162, 235)],
+                      _isLoading ? null : () {
+                        Navigator.of(context).pop();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const VideoAnalysisScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: TextButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontWeight: FontWeight.w500,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildExerciseOptionButton(
+    BuildContext context,
+    String label,
+    IconData icon,
+    List<Color> gradientColors,
+    VoidCallback? onPressed,
+  ) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: gradientColors),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: gradientColors.first.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+        ),
+        icon: Icon(icon, size: 20),
+        label: Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openAIRecognitionCamera(BuildContext context) async {
+    if (!mounted) return;
+    
+    setState(() => _isLoading = true);
+
+    try {
+      final cameras = await availableCameras();
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      if (cameras.isEmpty) {
+        _showSnackBar(context, 'No cameras available on this device', isError: true);
+        return;
+      }
+
+      final selectedCamera = cameras.firstWhere(
+        (camera) => camera.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CameraScreen(
+              // Add your camera screen parameters here
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showSnackBar(context, 'Error accessing camera: $e', isError: true);
+      }
+    }
+  }
+
+  Future<void> _openVideoAnalysis(BuildContext context) async {
+    if (!mounted) return;
+    
+    try {
+      setState(() => _isLoading = true);
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const VideoAnalysisScreen()),
+      );
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar(context, 'Error opening video analysis: $e', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   Widget _buildSectionHeader(String title) {
@@ -236,6 +490,18 @@ class AppDrawer extends StatelessWidget {
           color: Colors.white.withOpacity(0.7),
           letterSpacing: 1.0,
         ),
+      ),
+    );
+  }
+
+  void _showChangePasswordDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => change_password_service.ChangePasswordDialog(
+        auth: _auth,
+        onSuccess: () => _showSnackBar(context, 'Password changed successfully'),
+        onError: (error) => _showSnackBar(context, error, isError: true),
       ),
     );
   }
@@ -286,165 +552,6 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
-  // Fixed Change Password Dialog with proper overflow handling
-  void _showChangePasswordDialog(BuildContext context) {
-    final currentPasswordController = TextEditingController();
-    final newPasswordController = TextEditingController();
-    final confirmPasswordController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2E3192),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: Colors.white.withOpacity(0.2)),
-        ),
-        // Add this to prevent overflow
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 50),
-        contentPadding: EdgeInsets.zero,
-        title: Container(
-          padding: const EdgeInsets.all(20),
-          child: const Text(
-            'Change Password',
-            style: TextStyle(
-              color: Color(0xFF5494DD),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        content: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Current Password
-              TextField(
-                controller: currentPasswordController,
-                obscureText: true,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Current Password',
-                  labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(
-                      color: Colors.white.withOpacity(0.3),
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFF5494DD)),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // New Password
-              TextField(
-                controller: newPasswordController,
-                obscureText: true,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'New Password',
-                  labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(
-                      color: Colors.white.withOpacity(0.3),
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFF5494DD)),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Confirm Password
-              TextField(
-                controller: confirmPasswordController,
-                obscureText: true,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Confirm Password',
-                  labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(
-                      color: Colors.white.withOpacity(0.3),
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFF5494DD)),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(color: Colors.white70),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    // Add password change logic here
-                    if (newPasswordController.text !=
-                        confirmPasswordController.text) {
-                      _showErrorSnackBar(context, 'Passwords do not match');
-                      return;
-                    }
-
-                    Navigator.pop(context);
-                    _showSuccessSnackBar(
-                      context,
-                      'Password changed successfully',
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF5494DD),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text(
-                    'Change',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -475,28 +582,21 @@ class AppDrawer extends StatelessWidget {
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context); // Close dialog first
-
-              // Create AuthServices instance
-              final authServices = AuthServices();
-
-              // Attempt to sign out
-              final success = await authServices.signOut();
-
-              if (success) {
-                // Navigate to homepage and clear all routes
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  '/home', // Change this to your homepage route name
-                  (route) => false, // Remove all previous routes
-                );
-
-                _showSuccessSnackBar(context, 'Logged out successfully');
-              } else {
-                _showErrorSnackBar(
-                  context,
-                  'Failed to logout. Please try again.',
-                );
+              Navigator.pop(context);
+              
+              final success = await _auth.signOut();
+              
+              if (mounted) {
+                if (success) {
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/home',
+                    (route) => false,
+                  );
+                  _showSnackBar(context, 'Logged out successfully');
+                } else {
+                  _showSnackBar(context, 'Failed to logout. Please try again.', isError: true);
+                }
               }
             },
             style: ElevatedButton.styleFrom(
@@ -512,24 +612,14 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
-  // Helper method to show error messages - now accepts context parameter
-  void _showErrorSnackBar(BuildContext context, String message) {
+  // Unified snackbar method
+  void _showSnackBar(BuildContext context, String message, {bool isError = false}) {
+    if (!mounted) return;
+    
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-
-  // Updated success snackbar method to accept context parameter
-  void _showSuccessSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: const Color(0xFF5494DD),
+        backgroundColor: isError ? Colors.red : const Color(0xFF5494DD),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -588,17 +678,6 @@ class AppDrawer extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showComingSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$feature coming soon!'),
-        backgroundColor: const Color(0xFF5494DD),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

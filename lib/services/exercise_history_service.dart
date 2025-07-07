@@ -1,91 +1,41 @@
+// lib/services/exercise_history_service.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:intl/intl.dart';
+import '../utils/firestore_utils.dart';
 
 class ExerciseHistoryService {
-  static final ExerciseHistoryService _instance = ExerciseHistoryService._internal();
-  factory ExerciseHistoryService() => _instance;
-  ExerciseHistoryService._internal();
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  // Check if user is authenticated
+  bool get isAuthenticated => _auth.currentUser != null;
 
-  /// Add an exercise session to the user's history
-  Future<bool> addExerciseSession({
-    required String exerciseName,
-    int? reps,
-    int? sets,
-    double? duration,
-    String? notes,
-    DateTime? customDate,
-  }) async {
-    try {
-      final user = _auth.currentUser;
-      if (user == null) {
-        debugPrint('No user logged in');
-        return false;
-      }
-
-      final sessionData = {
-        'exerciseName': exerciseName,
-        'reps': reps,
-        'sets': sets,
-        'duration': duration,
-        'notes': notes,
-        'timestamp': customDate != null 
-            ? Timestamp.fromDate(customDate)
-            : FieldValue.serverTimestamp(),
-        'date': DateFormat('yyyy-MM-dd').format(customDate ?? DateTime.now()),
-        'userId': user.uid,
-      };
-
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('exercise_history')
-          .add(sessionData);
-
-      debugPrint('Exercise session added successfully: $exerciseName');
-      return true;
-    } catch (e) {
-      debugPrint('Error adding exercise session: $e');
-      return false;
-    }
-  }
-
-  /// Get exercise history for the current user
+  // Get exercise history with optional date filtering
   Stream<QuerySnapshot> getExerciseHistory({
-    String? exerciseFilter,
     DateTime? startDate,
     DateTime? endDate,
     int? limit,
   }) {
-    final user = _auth.currentUser;
-    if (user == null) {
+    if (!isAuthenticated) {
       return const Stream.empty();
     }
 
-    Query query = _firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('exercise_history')
-        .orderBy('timestamp', descending: true);
+    final user = _auth.currentUser!;
+    Query query = FirestoreUtils.exerciseSessions
+        .where('userId', isEqualTo: user.uid)
+        .orderBy('createdAt', descending: true); // Changed to createdAt
 
-    // Apply exercise name filter
-    if (exerciseFilter != null && exerciseFilter.isNotEmpty) {
-      query = query.where('exerciseName', isEqualTo: exerciseFilter);
-    }
-
-    // Apply date range filter
+    // Apply date filters if provided
     if (startDate != null) {
-      query = query.where('timestamp', isGreaterThanOrEqualTo: startDate);
+      query = query.where('createdAt', isGreaterThanOrEqualTo: startDate); // Changed to createdAt
     }
     if (endDate != null) {
-      query = query.where('timestamp', isLessThanOrEqualTo: endDate);
+      query = query.where('createdAt', isLessThanOrEqualTo: endDate); // Changed to createdAt
     }
 
-    // Apply limit
+    // Apply limit if provided
     if (limit != null) {
       query = query.limit(limit);
     }
@@ -93,79 +43,43 @@ class ExerciseHistoryService {
     return query.snapshots();
   }
 
-  /// Get exercise statistics for a specific exercise
-  Future<Map<String, dynamic>> getExerciseStats(String exerciseName) async {
-    try {
-      final user = _auth.currentUser;
-      if (user == null) return {};
-
-      final querySnapshot = await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('exercise_history')
-          .where('exerciseName', isEqualTo: exerciseName)
-          .get();
-
-      if (querySnapshot.docs.isEmpty) {
-        return {
-          'totalSessions': 0,
-          'totalReps': 0,
-          'totalSets': 0,
-          'totalDuration': 0.0,
-          'averageReps': 0.0,
-          'averageSets': 0.0,
-          'averageDuration': 0.0,
-        };
-      }
-
-      int totalSessions = querySnapshot.docs.length;
-      int totalReps = 0;
-      int totalSets = 0;
-      double totalDuration = 0.0;
-
-      for (var doc in querySnapshot.docs) {
-        final data = doc.data();
-        totalReps += (data['reps'] as int?) ?? 0;
-        totalSets += (data['sets'] as int?) ?? 0;
-        totalDuration += (data['duration'] as double?) ?? 0.0;
-      }
-
-      return {
-        'totalSessions': totalSessions,
-        'totalReps': totalReps,
-        'totalSets': totalSets,
-        'totalDuration': totalDuration,
-        'averageReps': totalSessions > 0 ? totalReps / totalSessions : 0.0,
-        'averageSets': totalSessions > 0 ? totalSets / totalSessions : 0.0,
-        'averageDuration': totalSessions > 0 ? totalDuration / totalSessions : 0.0,
-      };
-    } catch (e) {
-      debugPrint('Error getting exercise stats: $e');
-      return {};
+  // Add a new exercise session
+  Future<bool> addExerciseSession({
+    required String exerciseName,
+    int? reps,
+    int? sets,
+    double? duration,
+    String? notes,
+  }) async {
+    if (!isAuthenticated) {
+      debugPrint('User must be authenticated to add exercise session');
+      return false;
     }
-  }
 
-  /// Delete an exercise session
-  Future<bool> deleteExerciseSession(String sessionId) async {
     try {
-      final user = _auth.currentUser;
-      if (user == null) return false;
+      final user = _auth.currentUser!;
+      final sessionData = {
+        'userId': user.uid,
+        'exerciseName': exerciseName,
+        'totalReps': reps ?? 0, // Changed from 'reps' to 'totalReps'
+        'sets': sets,
+        'sessionDuration': duration ?? 0, // Changed from 'duration' to 'sessionDuration'
+        'notes': notes,
+        'createdAt': FieldValue.serverTimestamp(), // Primary timestamp
+        'updatedAt': FieldValue.serverTimestamp(),
+        'status': 'completed',
+      };
 
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('exercise_history')
-          .doc(sessionId)
-          .delete();
-
+      await FirestoreUtils.exerciseSessions.add(sessionData);
+      debugPrint('Exercise session added successfully');
       return true;
     } catch (e) {
-      debugPrint('Error deleting exercise session: $e');
+      debugPrint('Error adding exercise session: $e');
       return false;
     }
   }
 
-  /// Update an exercise session
+  // Update an existing exercise session
   Future<bool> updateExerciseSession({
     required String sessionId,
     String? exerciseName,
@@ -174,26 +88,24 @@ class ExerciseHistoryService {
     double? duration,
     String? notes,
   }) async {
+    if (!isAuthenticated) {
+      debugPrint('User must be authenticated to update exercise session');
+      return false;
+    }
+
     try {
-      final user = _auth.currentUser;
-      if (user == null) return false;
+      final updateData = <String, dynamic>{
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
 
-      Map<String, dynamic> updates = {};
-      if (exerciseName != null) updates['exerciseName'] = exerciseName;
-      if (reps != null) updates['reps'] = reps;
-      if (sets != null) updates['sets'] = sets;
-      if (duration != null) updates['duration'] = duration;
-      if (notes != null) updates['notes'] = notes;
+      if (exerciseName != null) updateData['exerciseName'] = exerciseName;
+      if (reps != null) updateData['totalReps'] = reps; // Changed to totalReps
+      if (sets != null) updateData['sets'] = sets;
+      if (duration != null) updateData['sessionDuration'] = duration; // Changed to sessionDuration
+      if (notes != null) updateData['notes'] = notes;
 
-      if (updates.isNotEmpty) {
-        await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .collection('exercise_history')
-            .doc(sessionId)
-            .update(updates);
-      }
-
+      await FirestoreUtils.exerciseSessions.doc(sessionId).update(updateData);
+      debugPrint('Exercise session updated successfully');
       return true;
     } catch (e) {
       debugPrint('Error updating exercise session: $e');
@@ -201,87 +113,91 @@ class ExerciseHistoryService {
     }
   }
 
-  /// Get today's exercise sessions
-  Stream<QuerySnapshot> getTodaysExercises() {
-    final user = _auth.currentUser;
-    if (user == null) {
-      return const Stream.empty();
+  // Delete an exercise session
+  Future<bool> deleteExerciseSession(String sessionId) async {
+    if (!isAuthenticated) {
+      debugPrint('User must be authenticated to delete exercise session');
+      return false;
     }
 
-    final now = DateTime.now();
-    final startOfDay = DateTime(now.year, now.month, now.day);
-    final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
-
-    return _firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('exercise_history')
-        .where('timestamp', isGreaterThanOrEqualTo: startOfDay)
-        .where('timestamp', isLessThanOrEqualTo: endOfDay)
-        .orderBy('timestamp', descending: true)
-        .snapshots();
+    try {
+      await FirestoreUtils.exerciseSessions.doc(sessionId).delete();
+      debugPrint('Exercise session deleted successfully');
+      return true;
+    } catch (e) {
+      debugPrint('Error deleting exercise session: $e');
+      return false;
+    }
   }
 
-  /// Get exercise streak (consecutive days with exercises)
+  // Get exercise streak (consecutive days with at least one exercise)
   Future<int> getExerciseStreak() async {
-    try {
-      final user = _auth.currentUser;
-      if (user == null) return 0;
+    if (!isAuthenticated) {
+      debugPrint('User must be authenticated to get exercise streak');
+      return 0;
+    }
 
+    try {
+      final user = _auth.currentUser!;
       final now = DateTime.now();
       int streak = 0;
-      DateTime currentDate = DateTime(now.year, now.month, now.day);
 
-      while (true) {
-        final startOfDay = currentDate;
-        final endOfDay = DateTime(currentDate.year, currentDate.month, currentDate.day, 23, 59, 59);
+      // Check each day going backwards from today
+      for (int i = 0; i < 365; i++) {
+        final checkDate = now.subtract(Duration(days: i));
+        final startOfDay = DateTime(checkDate.year, checkDate.month, checkDate.day);
+        final endOfDay = startOfDay.add(const Duration(days: 1));
 
-        final querySnapshot = await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .collection('exercise_history')
-            .where('timestamp', isGreaterThanOrEqualTo: startOfDay)
-            .where('timestamp', isLessThanOrEqualTo: endOfDay)
+        final query = await FirestoreUtils.exerciseSessions
+            .where('userId', isEqualTo: user.uid)
+            .where('createdAt', isGreaterThanOrEqualTo: startOfDay) // Changed to createdAt
+            .where('createdAt', isLessThan: endOfDay) // Changed to createdAt
             .limit(1)
             .get();
 
-        if (querySnapshot.docs.isNotEmpty) {
+        if (query.docs.isNotEmpty) {
           streak++;
-          currentDate = currentDate.subtract(const Duration(days: 1));
         } else {
+          // If this is the first day (today) and no exercises, streak is 0
+          // Otherwise, break the streak count
+          if (i == 0) {
+            streak = 0;
+          }
           break;
         }
       }
 
       return streak;
     } catch (e) {
-      debugPrint('Error calculating exercise streak: $e');
+      debugPrint('Error getting exercise streak: $e');
       return 0;
     }
   }
 
-  /// Get weekly exercise summary
+  // Get weekly exercise summary
   Future<Map<String, int>> getWeeklyExerciseSummary() async {
-    try {
-      final user = _auth.currentUser;
-      if (user == null) return {};
+    if (!isAuthenticated) {
+      debugPrint('User must be authenticated to get weekly summary');
+      return {};
+    }
 
+    try {
+      final user = _auth.currentUser!;
       final now = DateTime.now();
       final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-      final startDate = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+      final startOfWeekDate = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+      final endOfWeek = startOfWeekDate.add(const Duration(days: 7));
 
-      final querySnapshot = await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('exercise_history')
-          .where('timestamp', isGreaterThanOrEqualTo: startDate)
+      final query = await FirestoreUtils.exerciseSessions
+          .where('userId', isEqualTo: user.uid)
+          .where('createdAt', isGreaterThanOrEqualTo: startOfWeekDate) // Changed to createdAt
+          .where('createdAt', isLessThan: endOfWeek) // Changed to createdAt
           .get();
 
-      Map<String, int> summary = {};
-
-      for (var doc in querySnapshot.docs) {
-        final data = doc.data();
-        final exerciseName = data['exerciseName'] as String;
+      final summary = <String, int>{};
+      for (final doc in query.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final exerciseName = data['exerciseName'] as String? ?? 'Unknown';
         summary[exerciseName] = (summary[exerciseName] ?? 0) + 1;
       }
 
@@ -289,6 +205,160 @@ class ExerciseHistoryService {
     } catch (e) {
       debugPrint('Error getting weekly exercise summary: $e');
       return {};
+    }
+  }
+
+  // Get total exercise count for a specific exercise
+  Future<int> getExerciseCount(String exerciseName) async {
+    if (!isAuthenticated) {
+      debugPrint('User must be authenticated to get exercise count');
+      return 0;
+    }
+
+    try {
+      final user = _auth.currentUser!;
+      final query = await FirestoreUtils.exerciseSessions
+          .where('userId', isEqualTo: user.uid)
+          .where('exerciseName', isEqualTo: exerciseName)
+          .get();
+
+      return query.docs.length;
+    } catch (e) {
+      debugPrint('Error getting exercise count: $e');
+      return 0;
+    }
+  }
+
+  // Get personal best for a specific exercise
+  Future<Map<String, dynamic>?> getPersonalBest(String exerciseName) async {
+    if (!isAuthenticated) {
+      debugPrint('User must be authenticated to get personal best');
+      return null;
+    }
+
+    try {
+      final user = _auth.currentUser!;
+      
+      // Get best by reps
+      final repsQuery = await FirestoreUtils.exerciseSessions
+          .where('userId', isEqualTo: user.uid)
+          .where('exerciseName', isEqualTo: exerciseName)
+          .where('totalReps', isGreaterThan: 0) // Changed to totalReps
+          .orderBy('totalReps', descending: true) // Changed to totalReps
+          .limit(1)
+          .get();
+
+      // Get best by duration
+      final durationQuery = await FirestoreUtils.exerciseSessions
+          .where('userId', isEqualTo: user.uid)
+          .where('exerciseName', isEqualTo: exerciseName)
+          .where('sessionDuration', isGreaterThan: 0) // Changed to sessionDuration
+          .orderBy('sessionDuration', descending: true) // Changed to sessionDuration
+          .limit(1)
+          .get();
+
+      Map<String, dynamic>? bestReps;
+      Map<String, dynamic>? bestDuration;
+
+      if (repsQuery.docs.isNotEmpty) {
+        bestReps = repsQuery.docs.first.data() as Map<String, dynamic>;
+      }
+
+      if (durationQuery.docs.isNotEmpty) {
+        bestDuration = durationQuery.docs.first.data() as Map<String, dynamic>;
+      }
+
+      return {
+        'bestReps': bestReps,
+        'bestDuration': bestDuration,
+      };
+    } catch (e) {
+      debugPrint('Error getting personal best: $e');
+      return null;
+    }
+  }
+
+  // Get exercise statistics for a specific time period
+  Future<Map<String, dynamic>> getExerciseStats({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    if (!isAuthenticated) {
+      debugPrint('User must be authenticated to get exercise stats');
+      return {};
+    }
+
+    try {
+      final user = _auth.currentUser!;
+      Query query = FirestoreUtils.exerciseSessions
+          .where('userId', isEqualTo: user.uid);
+
+      if (startDate != null) {
+        query = query.where('createdAt', isGreaterThanOrEqualTo: startDate); // Changed to createdAt
+      }
+      if (endDate != null) {
+        query = query.where('createdAt', isLessThanOrEqualTo: endDate); // Changed to createdAt
+      }
+
+      final querySnapshot = await query.get();
+      final exercises = querySnapshot.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
+
+      int totalSessions = exercises.length;
+      int totalReps = 0;
+      int totalSets = 0;
+      double totalDuration = 0;
+      Map<String, int> exerciseFrequency = {};
+
+      for (final exercise in exercises) {
+        totalReps += (exercise['totalReps'] as int? ?? 0); // Changed to totalReps
+        totalSets += (exercise['sets'] as int? ?? 0);
+        totalDuration += (exercise['sessionDuration'] as double? ?? 0); // Changed to sessionDuration
+        
+        final exerciseName = exercise['exerciseName'] as String? ?? 'Unknown';
+        exerciseFrequency[exerciseName] = (exerciseFrequency[exerciseName] ?? 0) + 1;
+      }
+
+      return {
+        'totalSessions': totalSessions,
+        'totalReps': totalReps,
+        'totalSets': totalSets,
+        'totalDuration': totalDuration,
+        'exerciseFrequency': exerciseFrequency,
+        'averageRepsPerSession': totalSessions > 0 ? totalReps / totalSessions : 0,
+        'averageDurationPerSession': totalSessions > 0 ? totalDuration / totalSessions : 0,
+      };
+    } catch (e) {
+      debugPrint('Error getting exercise stats: $e');
+      return {};
+    }
+  }
+
+  // Get exercises for a specific date
+  Future<List<Map<String, dynamic>>> getExercisesForDate(DateTime date) async {
+    if (!isAuthenticated) {
+      debugPrint('User must be authenticated to get exercises for date');
+      return [];
+    }
+
+    try {
+      final user = _auth.currentUser!;
+      final startOfDay = DateTime(date.year, date.month, date.day);
+      final endOfDay = startOfDay.add(const Duration(days: 1));
+
+      final query = await FirestoreUtils.exerciseSessions
+          .where('userId', isEqualTo: user.uid)
+          .where('createdAt', isGreaterThanOrEqualTo: startOfDay) // Changed to createdAt
+          .where('createdAt', isLessThan: endOfDay) // Changed to createdAt
+          .orderBy('createdAt', descending: true) // Changed to createdAt
+          .get();
+
+      return query.docs.map((doc) => {
+        'id': doc.id,
+        ...doc.data() as Map<String, dynamic>,
+      }).toList();
+    } catch (e) {
+      debugPrint('Error getting exercises for date: $e');
+      return [];
     }
   }
 }

@@ -1,17 +1,17 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-// Abstract class to define the auth interface
-abstract class AuthService {
-  Future<bool> changePassword(String currentPassword, String newPassword);
-}
+import 'package:flutter/material.dart';
+import '../auth/auth_services.dart';
 
 class ChangePasswordDialog extends StatefulWidget {
-  final AuthService auth;
+  final AuthServices auth;
+  final VoidCallback? onSuccess;
+  final Function(String)? onError;
 
   const ChangePasswordDialog({
     Key? key,
     required this.auth,
+    this.onSuccess,
+    this.onError,
   }) : super(key: key);
 
   @override
@@ -27,32 +27,6 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
   bool _newPasswordVisible = false;
   bool _confirmPasswordVisible = false;
 
-  void _showErrorSnackBar(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-    }
-  }
-
-  void _showSuccessSnackBar(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: const Color(0xFF5494DD),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -63,10 +37,7 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
       ),
       title: const Text(
         'Change Password',
-        style: TextStyle(
-          color: Color(0xFF5494DD),
-          fontWeight: FontWeight.bold,
-        ),
+        style: TextStyle(color: Color(0xFF5494DD), fontWeight: FontWeight.bold),
       ),
       content: SingleChildScrollView(
         child: Column(
@@ -76,7 +47,9 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
               'Current Password',
               currentPasswordController,
               _currentPasswordVisible,
-              () => setState(() => _currentPasswordVisible = !_currentPasswordVisible),
+              () => setState(
+                () => _currentPasswordVisible = !_currentPasswordVisible,
+              ),
             ),
             const SizedBox(height: 16),
             _buildPasswordField(
@@ -90,14 +63,14 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
               'Confirm Password',
               confirmPasswordController,
               _confirmPasswordVisible,
-              () => setState(() => _confirmPasswordVisible = !_confirmPasswordVisible),
+              () => setState(
+                () => _confirmPasswordVisible = !_confirmPasswordVisible,
+              ),
             ),
             if (isLoading) ...[
               const SizedBox(height: 16),
               const CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  Color(0xFF5494DD),
-                ),
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF5494DD)),
               ),
             ],
           ],
@@ -106,10 +79,7 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
       actions: [
         TextButton(
           onPressed: isLoading ? null : () => Navigator.pop(context),
-          child: const Text(
-            'Cancel',
-            style: TextStyle(color: Colors.white70),
-          ),
+          child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
         ),
         ElevatedButton(
           onPressed: isLoading ? null : _handlePasswordChange,
@@ -172,35 +142,35 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
 
     // Validation
     if (currentPassword.isEmpty) {
-      _showErrorSnackBar('Please enter your current password');
+      widget.onError?.call('Please enter your current password');
       return;
     }
 
     if (newPassword.isEmpty) {
-      _showErrorSnackBar('Please enter a new password');
+      widget.onError?.call('Please enter a new password');
       return;
     }
 
     if (newPassword.length < 8) {
-      _showErrorSnackBar('New password must be at least 8 characters');
+      widget.onError?.call('New password must be at least 8 characters');
       return;
     }
 
     // Enhanced password validation
     if (!_isPasswordComplex(newPassword)) {
-      _showErrorSnackBar(
+      widget.onError?.call(
         'Password must contain at least one uppercase letter, one lowercase letter, and one number',
       );
       return;
     }
 
     if (newPassword != confirmPassword) {
-      _showErrorSnackBar('New passwords do not match');
+      widget.onError?.call('New passwords do not match');
       return;
     }
 
     if (currentPassword == newPassword) {
-      _showErrorSnackBar(
+      widget.onError?.call(
         'New password must be different from current password',
       );
       return;
@@ -222,16 +192,16 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
       if (mounted) {
         if (success) {
           Navigator.pop(context);
-          _showSuccessSnackBar('Password changed successfully');
+          widget.onSuccess?.call();
         } else {
-          _showErrorSnackBar(
+          widget.onError?.call(
             'Failed to change password. Please check your current password.',
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        _showErrorSnackBar('An unexpected error occurred. Please try again.');
+        widget.onError?.call('An unexpected error occurred. Please try again.');
       }
     } finally {
       // Reset loading state
@@ -257,24 +227,4 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
     confirmPasswordController.dispose();
     super.dispose();
   }
-}
-
-// Example usage:
-class ExampleAuthService implements AuthService {
-  @override
-  Future<bool> changePassword(String currentPassword, String newPassword) async {
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 2));
-    // Return true for success, false for failure
-    return currentPassword == "oldpassword123"; // Mock validation
-  }
-}
-
-// How to use the dialog:
-void showChangePasswordDialog(BuildContext context, AuthService authService) {
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => ChangePasswordDialog(auth: authService),
-  );
 }

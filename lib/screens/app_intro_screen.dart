@@ -8,6 +8,7 @@ import '../drawer/app_drawer.dart';
 import '../auth/auth_services.dart';
 import 'exercise_list.dart';
 import 'signup_screen.dart';
+import 'video_analysis_screen.dart';
 
 class AppIntroScreen extends StatefulWidget {
   const AppIntroScreen({super.key});
@@ -393,259 +394,335 @@ class _AppIntroScreenState extends State<AppIntroScreen> {
     );
   }
 
-  // FIXED: This method is now properly inside the class
+  
   void _showExerciseOptionsDialog(BuildContext context) {
-    print('Showing exercise options dialog'); // Debug print
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 40,
-          ), // Added vertical padding
-          child: Container(
-            constraints: const BoxConstraints(
-              maxHeight: 600, // Set maximum height
-              maxWidth: 400, // Set maximum width
-            ),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF4A5FBF), // Blue purple
-                  Color(0xFF3B4FB8), // Deeper blue
-                ],
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
+  print('Showing exercise options dialog'); // Debug print
+  showDialog(
+    context: context,
+    barrierDismissible: true,
+    builder: (BuildContext context) {
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 40,
+        ), // Added vertical padding
+        child: Container(
+          constraints: const BoxConstraints(
+            maxHeight: 700, // Increased height for additional button
+            maxWidth: 400, // Set maximum width
+          ),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF4A5FBF), // Blue purple
+                Color(0xFF3B4FB8), // Deeper blue
               ],
             ),
-            child: SingleChildScrollView(
-              // Added scrollable content
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Title
-                    const Text(
-                      'Choose Your\nWorkout Method',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        height: 1.2,
-                      ),
-                      textAlign: TextAlign.center,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            // Added scrollable content
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Title
+                  const Text(
+                    'Choose Your\nWorkout Method',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      height: 1.2,
                     ),
+                    textAlign: TextAlign.center,
+                  ),
 
-                    const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-                    // Description
-                    Text(
-                      'You can either select exercises from our curated list or start the camera and let our AI recognize your exercises automatically.',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: 14,
-                        height: 1.3,
-                      ),
-                      textAlign: TextAlign.center,
+                  // Description
+                  Text(
+                    'You can select exercises from our curated list, use AI recognition with your camera, or upload a video for detailed analysis.',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 14,
+                      height: 1.3,
                     ),
+                    textAlign: TextAlign.center,
+                  ),
 
-                    const SizedBox(height: 24),
+                  const SizedBox(height: 24),
 
-                    // Browse Exercise List Button
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF5494DD), Color(0xFF4A84C7)],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF5494DD).withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
+                  // Browse Exercise List Button
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF5494DD), Color(0xFF4A84C7)],
                       ),
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.of(context).pop(); // Close dialog
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const ExerciseListScreen(),
-                            ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          foregroundColor: Colors.white,
-                          shadowColor: Colors.transparent,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF5494DD).withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
                         ),
-                        icon: const Icon(Icons.list_alt, size: 20),
-                        label: const Text(
-                          'Browse Exercise List',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ),
+                      ],
                     ),
-
-                    const SizedBox(height: 12),
-
-                    // AI Recognition Button
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF00E5FF), Color(0xFF00B8CC)],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF00E5FF).withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.of(context).pop(); // Close dialog
-                          _openAIRecognitionCamera();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          foregroundColor: Colors.white,
-                          shadowColor: Colors.transparent,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        icon: const Icon(Icons.camera_alt, size: 20),
-                        label: const Text(
-                          'Use AI Recognition',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Cancel Button
-                    TextButton(
+                    child: ElevatedButton.icon(
                       onPressed: () {
                         Navigator.of(context).pop(); // Close dialog
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ExerciseListScreen(),
+                          ),
+                        );
                       },
-                      style: TextButton.styleFrom(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: Colors.white,
+                        shadowColor: Colors.transparent,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      child: Text(
-                        'Cancel',
+                      icon: const Icon(Icons.list_alt, size: 20),
+                      label: const Text(
+                        'Browse Exercise List',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
                           fontSize: 15,
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // AI Recognition Button
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF00E5FF), Color(0xFF00B8CC)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00E5FF).withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pop(); // Close dialog
+                        _openAIRecognitionCamera();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: Colors.white,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      icon: const Icon(Icons.camera_alt, size: 20),
+                      label: const Text(
+                        'Use AI Recognition',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Video Upload Button
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color.fromARGB(255, 109, 149, 209), Color.fromARGB(255, 84, 162, 235)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color.fromARGB(255, 39, 82, 176).withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton.icon(
+                      onPressed: _isLoading ? null : () {
+                        Navigator.of(context).pop(); // Close dialog
+                        _openVideoAnalysis();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: Colors.white,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      icon: const Icon(Icons.video_library, size: 20),
+                      label: const Text(
+                        'Upload Video Analysis',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Cancel Button
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(); // Close dialog
+                    },
+                    style: TextButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontWeight: FontWeight.w500,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
+}
 
-  // FIXED: This method is now properly inside the class
-  Future<void> _openAIRecognitionCamera() async {
+// FIXED: This method is now properly inside the class
+Future<void> _openAIRecognitionCamera() async {
+  setState(() {
+    _isLoading = true;
+  });
+
+  try {
+    // Get available cameras
+    final cameras = await availableCameras();
+
     setState(() {
-      _isLoading = true;
+      _isLoading = false;
     });
 
-    try {
-      // Get available cameras
-      final cameras = await availableCameras();
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (cameras.isEmpty) {
-        // Show error if no cameras available
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No cameras available on this device'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
-
-      // Use front camera for exercise recognition, fall back to first available
-      final selectedCamera = cameras.firstWhere(
-        (camera) => camera.lensDirection == CameraLensDirection.front,
-        orElse: () => cameras.first,
-      );
-
-      // Navigate to camera screen without specific exercise (AI will detect automatically)
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CameraScreen(
-              serverUrl:  'ws://192.168.1.100:8000',
-              camera: null,
-              exerciseName: null, // Let AI detect automatically
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
+    if (cameras.isEmpty) {
+      // Show error if no cameras available
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error accessing camera: $e'),
+          const SnackBar(
+            content: Text('No cameras available on this device'),
             backgroundColor: Colors.red,
           ),
         );
       }
-      print('Error opening AI recognition camera: $e');
+      return;
     }
+
+    // Use front camera for exercise recognition, fall back to first available
+    final selectedCamera = cameras.firstWhere(
+      (camera) => camera.lensDirection == CameraLensDirection.front,
+      orElse: () => cameras.first,
+    );
+
+    // Navigate to camera screen without specific exercise (AI will detect automatically)
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CameraScreen(
+            // serverUrl:  'ws://192.168.1.100:8000',
+            // camera: null,
+            // exerciseName: null, // Let AI detect automatically
+          ),
+        ),
+      );
+    }
+  } catch (e) {
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error accessing camera: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+    print('Error opening AI recognition camera: $e');
   }
+}
+
+// Video Analysis Method
+Future<void> _openVideoAnalysis() async {
+  try {
+    setState(() {
+      _isLoading = true;
+    });
+
+    // Navigate to video analysis screen
+    if (mounted) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const VideoAnalysisScreen(),
+        ),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening video analysis: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+    print('Error opening video analysis: $e');
+  } finally {
+    setState(() {
+      _isLoading = false;
+    });
+  }
+}
 
   Widget _buildFeatureItem(IconData icon, String title, String description) {
     return Container(

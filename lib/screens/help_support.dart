@@ -20,8 +20,8 @@ class HelpSupportPage extends StatelessWidget {
         child: SafeArea(
           child: Column(
             children: [
-              // Header
-              Padding(
+              // Header - Fixed overflow issue
+              Container(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
                   children: [
@@ -34,12 +34,15 @@ class HelpSupportPage extends StatelessWidget {
                       onPressed: () => Navigator.pop(context),
                     ),
                     const SizedBox(width: 8),
-                    const Text(
-                      'Help & Support',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w600,
+                    const Expanded(
+                      child: Text(
+                        'Help & Support',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -75,23 +78,9 @@ class HelpSupportPage extends StatelessWidget {
                       ),
                       
                       _buildFAQCard(
-                        icon: Icons.notifications_outlined,
-                        question: 'How do I enable notifications?',
-                        answer: 'Go to Settings > Notifications and toggle on "Receive workout reminders".',
-                        context: context,
-                      ),
-                      
-                      _buildFAQCard(
                         icon: Icons.sync_outlined,
                         question: 'How do I sync my data?',
                         answer: 'Your workout data automatically syncs when you\'re connected to the internet.',
-                        context: context,
-                      ),
-                      
-                      _buildFAQCard(
-                        icon: Icons.dark_mode_outlined,
-                        question: 'Can I change the app theme?',
-                        answer: 'Yes! Go to Settings and toggle "Dark Mode" to switch between light and dark themes.',
                         context: context,
                       ),
                       
@@ -112,20 +101,13 @@ class HelpSupportPage extends StatelessWidget {
                       _buildContactCard(
                         icon: Icons.email_outlined,
                         title: 'Email Support',
-                        subtitle: 'support@workoutapp.com',
+                        subtitle: 'noorulhudasaleem4@gmail.com',
                         onTap: () {
                           // Handle email tap
                         },
                       ),
                       
-                      _buildContactCard(
-                        icon: Icons.chat_outlined,
-                        title: 'Live Chat',
-                        subtitle: 'Available 24/7',
-                        onTap: () {
-                          // Handle chat tap
-                        },
-                      ),
+
                       
                       _buildContactCard(
                         icon: Icons.phone_outlined,
@@ -155,25 +137,18 @@ class HelpSupportPage extends StatelessWidget {
                         title: 'User Guide',
                         subtitle: 'Complete guide to using the app',
                         onTap: () {
-                          // Handle user guide tap
+                          _showUserGuideDialog(context);
                         },
                       ),
                       
-                      _buildOptionCard(
-                        icon: Icons.bug_report_outlined,
-                        title: 'Report a Bug',
-                        subtitle: 'Help us improve the app',
-                        onTap: () {
-                          // Handle bug report tap
-                        },
-                      ),
+
                       
                       _buildOptionCard(
                         icon: Icons.star_outline,
                         title: 'Rate Our App',
                         subtitle: 'Share your experience',
                         onTap: () {
-                          // Handle rating tap
+                          _showRatingDialog(context);
                         },
                       ),
                       
@@ -182,7 +157,7 @@ class HelpSupportPage extends StatelessWidget {
                         title: 'Privacy Policy',
                         subtitle: 'How we protect your data',
                         onTap: () {
-                          // Handle privacy policy tap
+                          _showPrivacyPolicyDialog(context);
                         },
                       ),
                       
@@ -347,6 +322,262 @@ class HelpSupportPage extends StatelessWidget {
         ),
         onTap: onTap,
       ),
+    );
+  }
+
+  void _showUserGuideDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+              maxWidth: MediaQuery.of(context).size.width * 0.9,
+            ),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF4A47E8), Color(0xFF00D4AA)],
+              ),
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.article_outlined,
+                    color: Colors.white,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'User Guide',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Our app offers amazing features:\n\n'
+                    '• BMI Calculator - Calculate your Body Mass Index\n'
+                    '• Calorie Tracker - Track your daily calories\n'
+                    '• Workout Generator - Generate personalized workout plans\n'
+                    '• Diet Plan Generator - Create custom diet plans\n'
+                    '• Real-time Form Analysis - Get live feedback on your exercises\n'
+                    '• Video Form Analysis - Analyze your workout videos',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF4A47E8),
+                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                    ),
+                    child: const Text('Got it!'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+
+
+  void _showRatingDialog(BuildContext context) {
+    int selectedRating = 0;
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.6,
+                  maxWidth: MediaQuery.of(context).size.width * 0.9,
+                ),
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF4A47E8), Color(0xFF00D4AA)],
+                  ),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.star_outline,
+                        color: Colors.white,
+                        size: 48,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Rate Our App',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'How would you rate your experience?',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 16,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(5, (index) {
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                selectedRating = index + 1;
+                              });
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              child: Icon(
+                                index < selectedRating ? Icons.star : Icons.star_border,
+                                color: Colors.white,
+                                size: 32,
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton(
+                        onPressed: selectedRating > 0 ? () {
+                          Navigator.of(context).pop();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Thanks for rating us $selectedRating stars!'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        } : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFF4A47E8),
+                          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                        ),
+                        child: const Text('Submit Rating'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showPrivacyPolicyDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+              maxWidth: MediaQuery.of(context).size.width * 0.9,
+            ),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF4A47E8), Color(0xFF00D4AA)],
+              ),
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.policy_outlined,
+                    color: Colors.white,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Privacy Policy',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Your Privacy Matters\n\n'
+                    '• Your videos and live streams are NOT saved on our servers\n'
+                    '• We use advanced encryption to protect your data\n'
+                    '• Your personal information is never shared with third parties\n'
+                    '• All workout data is stored securely and privately\n'
+                    '• You have full control over your data and can delete it anytime',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      height: 1.5,
+                    ),
+                    textAlign: TextAlign.left,
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF4A47E8),
+                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                    ),
+                    child: const Text('Understood'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

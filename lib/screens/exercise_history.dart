@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import '../services/exercise_history_service.dart';
+import '../utils/firestore_utils.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ExerciseHistoryScreen extends StatefulWidget {
   const ExerciseHistoryScreen({super.key});
@@ -16,17 +18,58 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
   late AnimationController _iconController;
   late Animation<double> _titleAnimation;
   late Animation<double> _listAnimation;
-  
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  
+  //  static final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  final ExerciseHistoryService _exerciseService = ExerciseHistoryService();
+
   String _selectedFilter = 'All';
-  final List<String> _filterOptions = ['All', 'Today', 'This Week', 'This Month'];
+  final List<String> _filterOptions = [
+    'All',
+    'Today',
+    'This Week',
+    'This Month',
+  ];
 
   @override
   void initState() {
     super.initState();
     _initializeAnimations();
+    _checkAuthentication();
+  }
+
+  void _checkAuthentication() {
+    if (!_exerciseService.isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showAuthenticationError();
+      });
+    }
+  }
+
+  void _showAuthenticationError() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2E3192),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Authentication Required',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
+        content: const Text(
+          'Please log in to view your exercise history.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context); // Go back to previous screen
+            },
+            child: const Text('OK', style: TextStyle(color: Color(0xFF00E5FF))),
+          ),
+        ],
+      ),
+    );
   }
 
   void _initializeAnimations() {
@@ -66,93 +109,97 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
     super.dispose();
   }
 
-  // Get user's exercise history from Firestore
   Stream<QuerySnapshot> _getExerciseHistory() {
-    final user = _auth.currentUser;
+    if (!_exerciseService.isAuthenticated) {
+      return const Stream.empty();
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       return const Stream.empty();
     }
 
-    Query query = _firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('exercise_history')
-        .orderBy('timestamp', descending: true);
+    Query query = FirebaseFirestore.instance
+        .collection('exercise_sessions')
+        .where('userId', isEqualTo: user.uid)
+        .orderBy('createdAt', descending: true);
 
-    // Apply date filters
     if (_selectedFilter != 'All') {
       DateTime now = DateTime.now();
-      DateTime startDate;
+      DateTime? startDate;
+      DateTime? endDate;
 
       switch (_selectedFilter) {
         case 'Today':
           startDate = DateTime(now.year, now.month, now.day);
+          endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
           break;
         case 'This Week':
           startDate = now.subtract(Duration(days: now.weekday - 1));
           startDate = DateTime(startDate.year, startDate.month, startDate.day);
+          endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
           break;
         case 'This Month':
           startDate = DateTime(now.year, now.month, 1);
+          endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
           break;
-        default:
-          startDate = DateTime.now();
       }
 
-      query = query.where('timestamp', isGreaterThanOrEqualTo: startDate);
+      if (startDate != null && endDate != null) {
+        query = query
+            .where('createdAt', isGreaterThanOrEqualTo: startDate)
+            .where('createdAt', isLessThanOrEqualTo: endDate);
+      }
     }
 
-    return query.snapshots();
+    return query.limit(100).snapshots();
   }
 
-  // Method to manually add exercise (you can call this from your camera screen)
-  Future<void> addExerciseToHistory(String exerciseName, {
+  Future<void> addExerciseToHistory(
+    String exerciseName, {
     int? reps,
     int? sets,
     double? duration,
     String? notes,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+    if (!_exerciseService.isAuthenticated) {
+      _showSnackBar('Please log in to add exercises', Colors.red);
+      return;
+    }
 
-    try {
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('exercise_history')
-          .add({
-        'exerciseName': exerciseName,
-        'reps': reps,
-        'sets': sets,
-        'duration': duration,
-        'notes': notes,
-        'timestamp': FieldValue.serverTimestamp(),
-        'date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
-      });
-    } catch (e) {
-      debugPrint('Error adding exercise to history: $e');
+    final success = await _exerciseService.addExerciseSession(
+      exerciseName: exerciseName,
+      reps: reps,
+      sets: sets,
+      duration: duration,
+      notes: notes,
+    );
+
+    if (success) {
+      _showSnackBar('Exercise added successfully!', Colors.green);
+    } else {
+      _showSnackBar('Failed to add exercise', Colors.red);
     }
   }
 
-  // Delete exercise from history
   Future<void> _deleteExercise(String docId) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(_auth.currentUser!.uid)
-          .collection('exercise_history')
-          .doc(docId)
-          .delete();
-      
+    if (!_exerciseService.isAuthenticated) {
+      _showSnackBar('Please log in to delete exercises', Colors.red);
+      return;
+    }
+
+    final success = await _exerciseService.deleteExerciseSession(docId);
+
+    if (success) {
       _showSnackBar('Exercise deleted successfully', Colors.green);
-    } catch (e) {
-      _showSnackBar('Error deleting exercise: $e', Colors.red);
+    } else {
+      _showSnackBar('Error deleting exercise', Colors.red);
     }
   }
 
   void _showSnackBar(String message, Color backgroundColor) {
     if (!mounted) return;
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -174,10 +221,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF2E3192), // Deep purple
-              Color(0xFF1BFFFF), // Cyan
-            ],
+            colors: [Color(0xFF2E3192), Color(0xFF1BFFFF)],
           ),
         ),
         child: SafeArea(
@@ -186,6 +230,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
               const SizedBox(height: 10),
               _buildAppBar(),
               _buildFilterBar(),
+              if (_exerciseService.isAuthenticated) _buildStatsSection(),
               Expanded(
                 child: AnimatedBuilder(
                   animation: _listAnimation,
@@ -267,7 +312,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
         itemBuilder: (context, index) {
           final option = _filterOptions[index];
           final isSelected = _selectedFilter == option;
-          
+
           return Container(
             margin: const EdgeInsets.only(right: 10),
             child: Material(
@@ -281,14 +326,17 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
                   });
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(25),
-                    color: isSelected 
+                    color: isSelected
                         ? const Color(0xFF00E5FF).withOpacity(0.3)
                         : Colors.white.withOpacity(0.1),
                     border: Border.all(
-                      color: isSelected 
+                      color: isSelected
                           ? const Color(0xFF00E5FF)
                           : Colors.white.withOpacity(0.3),
                       width: 1,
@@ -300,7 +348,9 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
                       style: TextStyle(
                         color: isSelected ? Colors.white : Colors.white70,
                         fontSize: 14,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.w400,
                       ),
                     ),
                   ),
@@ -313,7 +363,104 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
     );
   }
 
+  Widget _buildStatsSection() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: IntrinsicHeight(
+        // This makes both cards same height
+        child: Row(
+          children: [
+            Expanded(
+              child: FutureBuilder<int>(
+                future: _exerciseService.getExerciseStreak(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return _buildStatCard(
+                      'Streak',
+                      '...',
+                      Icons.local_fire_department,
+                    );
+                  }
+                  return _buildStatCard(
+                    'Streak',
+                    '${snapshot.data ?? 0} days',
+                    Icons.local_fire_department,
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FutureBuilder<Map<String, int>>(
+                future: _exerciseService.getWeeklyExerciseSummary(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return _buildStatCard(
+                      'This Week',
+                      '...',
+                      Icons.calendar_today,
+                    );
+                  }
+                  final totalWeekly =
+                      snapshot.data?.values.fold(0, (a, b) => a + b) ?? 0;
+                  return _buildStatCard(
+                    'This Week',
+                    '$totalWeekly workouts',
+                    Icons.calendar_today,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatCard(String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: Colors.white.withOpacity(0.1),
+        border: Border.all(
+          color: const Color(0xFF00E5FF).withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center, // Center the content
+        mainAxisSize: MainAxisSize.min, // Take minimum space needed
+        children: [
+          Icon(icon, color: const Color(0xFF00E5FF), size: 20), // Smaller icon
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14, // Smaller font
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 10, // Smaller font
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildExerciseHistoryList() {
+    if (!_exerciseService.isAuthenticated) {
+      return _buildAuthenticationRequired();
+    }
+
     return StreamBuilder<QuerySnapshot>(
       stream: _getExerciseHistory(),
       builder: (context, snapshot) {
@@ -327,9 +474,44 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
 
         if (snapshot.hasError) {
           return Center(
-            child: Text(
-              'Error: ${snapshot.error}',
-              style: const TextStyle(color: Colors.white),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: Colors.white.withOpacity(0.5),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Error loading history',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Please check your internet connection and try again',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {}); // Trigger rebuild
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00E5FF),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Retry'),
+                ),
+              ],
             ),
           );
         }
@@ -339,7 +521,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
         }
 
         final exercises = snapshot.data!.docs;
-        
+
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: ListView.builder(
@@ -356,16 +538,45 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildAuthenticationRequired() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.history,
+            Icons.lock_outline,
             size: 80,
             color: Colors.white.withOpacity(0.3),
           ),
+          const SizedBox(height: 20),
+          Text(
+            'Authentication Required',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.8),
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Please log in to view your exercise history',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.6),
+              fontSize: 16,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.history, size: 80, color: Colors.white.withOpacity(0.3)),
           const SizedBox(height: 20),
           Text(
             'No Exercise History',
@@ -377,7 +588,9 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
           ),
           const SizedBox(height: 10),
           Text(
-            'Start exercising to see your history here',
+            _selectedFilter == 'All'
+                ? 'Start exercising to see your history here'
+                : 'No exercises found for $_selectedFilter',
             style: TextStyle(
               color: Colors.white.withOpacity(0.6),
               fontSize: 16,
@@ -390,12 +603,12 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
   }
 
   Widget _buildExerciseHistoryCard(String docId, Map<String, dynamic> data) {
-    final timestamp = data['timestamp'] as Timestamp?;
+    final timestamp = data['createdAt'] as Timestamp?; // Keep as createdAt
     final date = timestamp?.toDate() ?? DateTime.now();
     final exerciseName = data['exerciseName'] as String? ?? 'Unknown Exercise';
-    final reps = data['reps'] as int?;
+    final reps = data['totalReps'] as int?; // Changed to totalReps
     final sets = data['sets'] as int?;
-    final duration = data['duration'] as double?;
+    final duration = (data['sessionDuration'] as num?)?.toDouble();
     final notes = data['notes'] as String?;
 
     return Container(
@@ -422,10 +635,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
                 spreadRadius: 1,
               ),
             ],
-            border: Border.all(
-              color: Colors.white.withOpacity(0.2),
-              width: 1,
-            ),
+            border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
           ),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -459,13 +669,48 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
                         ],
                       ),
                     ),
-                    IconButton(
-                      onPressed: () => _showDeleteConfirmation(docId, exerciseName),
+                    PopupMenuButton<String>(
                       icon: const Icon(
-                        Icons.delete_outline,
+                        Icons.more_vert,
                         color: Colors.white70,
                         size: 20,
                       ),
+                      color: const Color(0xFF2E3192),
+                      onSelected: (value) {
+                        if (value == 'delete') {
+                          _showDeleteConfirmation(docId, exerciseName);
+                        } else if (value == 'edit') {
+                          _showEditDialog(docId, data);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit, color: Colors.white70, size: 18),
+                              SizedBox(width: 8),
+                              Text(
+                                'Edit',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete, color: Colors.red, size: 18),
+                              SizedBox(width: 8),
+                              Text(
+                                'Delete',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -541,11 +786,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
           width: 2,
         ),
       ),
-      child: Icon(
-        iconData,
-        size: 20,
-        color: const Color(0xFF00E5FF),
-      ),
+      child: Icon(iconData, size: 20, color: const Color(0xFF00E5FF)),
     );
   }
 
@@ -594,9 +835,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF2E3192),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
           'Delete Exercise',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
@@ -618,9 +857,142 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen>
               Navigator.pop(context);
               _deleteExercise(docId);
             },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditDialog(String docId, Map<String, dynamic> data) {
+    final nameController = TextEditingController(text: data['exerciseName']);
+    final repsController = TextEditingController(
+      text: data['totalReps']?.toString() ?? '', // Changed to totalReps
+    );
+    final setsController = TextEditingController(
+      text: data['sets']?.toString() ?? '',
+    );
+    final durationController = TextEditingController(
+      text:
+          data['sessionDuration']?.toString() ??
+          '', // Changed to sessionDuration
+    );
+    final notesController = TextEditingController(text: data['notes'] ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2E3192),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Edit Exercise',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: 'Exercise Name',
+                  labelStyle: TextStyle(color: Colors.white70),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white30),
+                  ),
+                ),
+              ),
+              TextField(
+                controller: repsController,
+                style: const TextStyle(color: Colors.white),
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Reps',
+                  labelStyle: TextStyle(color: Colors.white70),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white30),
+                  ),
+                ),
+              ),
+              TextField(
+                controller: setsController,
+                style: const TextStyle(color: Colors.white),
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Sets',
+                  labelStyle: TextStyle(color: Colors.white70),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white30),
+                  ),
+                ),
+              ),
+              TextField(
+                controller: durationController,
+                style: const TextStyle(color: Colors.white),
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Duration (seconds)',
+                  labelStyle: TextStyle(color: Colors.white70),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white30),
+                  ),
+                ),
+              ),
+              TextField(
+                controller: notesController,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: 'Notes',
+                  labelStyle: TextStyle(color: Colors.white70),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white30),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white.withOpacity(0.7)),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final success = await _exerciseService.updateExerciseSession(
+                sessionId: docId,
+                exerciseName: nameController.text.isNotEmpty
+                    ? nameController.text
+                    : null,
+                reps: repsController.text.isNotEmpty
+                    ? int.tryParse(repsController.text)
+                    : null,
+                sets: setsController.text.isNotEmpty
+                    ? int.tryParse(setsController.text)
+                    : null,
+                duration: durationController.text.isNotEmpty
+                    ? double.tryParse(durationController.text)
+                    : null,
+                notes: notesController.text.isNotEmpty
+                    ? notesController.text
+                    : null,
+              );
+
+              Navigator.pop(context);
+
+              if (success) {
+                _showSnackBar('Exercise updated successfully!', Colors.green);
+              } else {
+                _showSnackBar('Failed to update exercise', Colors.red);
+              }
+            },
             child: const Text(
-              'Delete',
-              style: TextStyle(color: Colors.red),
+              'Update',
+              style: TextStyle(color: Color(0xFF00E5FF)),
             ),
           ),
         ],
