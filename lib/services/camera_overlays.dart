@@ -70,8 +70,8 @@ class CameraOverlays extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // Back button
           IconButton(
             onPressed: onBackPressed,
             icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -79,50 +79,60 @@ class CameraOverlays extends StatelessWidget {
               backgroundColor: Colors.black.withOpacity(0.5),
             ),
           ),
+          const SizedBox(width: 8),
+
+          // Exercise name - with proper constraints
           Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  exerciseName ?? 'Exercise Camera',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                exerciseName ?? 'Exercise Camera',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14, // Reduced from 18
+                  fontWeight: FontWeight.bold,
                 ),
-              ],
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
-          Row(
-            children: [
-              IconButton(
-                onPressed: onToggleVoice,
-                icon: Icon(
-                  isVoiceEnabled ? Icons.volume_up : Icons.volume_off,
-                  color: isVoiceEnabled ? Colors.white : Colors.grey,
-                ),
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.black.withOpacity(0.5),
-                ),
-                tooltip: isVoiceEnabled ? 'Disable Voice' : 'Enable Voice',
-              ),
-              const SizedBox(width: 8),
-              if (availableCameras.length > 1)
-                IconButton(
-                  onPressed: isSwitchingCamera ? null : onSwitchCamera,
-                  icon: Icon(
-                    Icons.flip_camera_ios,
-                    color: isSwitchingCamera ? Colors.grey : Colors.white,
-                  ),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.black.withOpacity(0.5),
-                  ),
-                  tooltip: 'Switch Camera',
-                ),
-            ],
+
+          const SizedBox(width: 8),
+
+          // Voice toggle button
+          IconButton(
+            onPressed: onToggleVoice,
+            icon: Icon(
+              isVoiceEnabled ? Icons.volume_up : Icons.volume_off,
+              color: isVoiceEnabled ? Colors.white : Colors.grey,
+            ),
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.black.withOpacity(0.5),
+            ),
+            tooltip: isVoiceEnabled ? 'Disable Voice' : 'Enable Voice',
           ),
+
+          // Camera switch button (if multiple cameras available)
+          if (availableCameras.length > 1) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              onPressed: isSwitchingCamera ? null : onSwitchCamera,
+              icon: Icon(
+                Icons.flip_camera_ios,
+                color: isSwitchingCamera ? Colors.grey : Colors.white,
+              ),
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.black.withOpacity(0.5),
+              ),
+              tooltip: 'Switch Camera',
+            ),
+          ],
         ],
       ),
     );
@@ -207,7 +217,21 @@ class CameraOverlays extends StatelessWidget {
 
   String _getShortExerciseName() {
     final name = exerciseName ?? 'N/A';
-    return name.length > 8 ? '${name.substring(0, 8)}...' : name;
+    if (name.length <= 6) return name;
+
+    // Handle common exercise abbreviations
+    final abbreviations = {
+      'Push-up': 'Push',
+      'Pull-up': 'Pull',
+      'Tricep Pushdown': 'Tricep',
+      'Bicep Curl': 'Bicep',
+      'Lat Pulldown': 'Lat',
+      'Bench Press': 'Bench',
+      'Deadlift': 'Dead',
+      'Squat': 'Squat',
+    };
+
+    return abbreviations[name] ?? name.substring(0, 6);
   }
 
   Widget _buildInfoChip(String label, String value, IconData icon) {

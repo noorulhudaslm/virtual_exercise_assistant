@@ -8,7 +8,7 @@ import '../drawer/app_drawer.dart';
 import '../auth/auth_services.dart';
 import 'exercise_list.dart';
 import 'signup_screen.dart';
-import 'video_analysis_screen.dart';
+
 
 class AppIntroScreen extends StatefulWidget {
   const AppIntroScreen({super.key});
@@ -453,7 +453,7 @@ class _AppIntroScreenState extends State<AppIntroScreen> {
 
                   // Description
                   Text(
-                    'You can select exercises from our curated list, use AI recognition with your camera, or upload a video for detailed analysis.',
+                    'You can select exercises from our curated list or use AI recognition.',
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.9),
                       fontSize: 14,
@@ -555,48 +555,8 @@ class _AppIntroScreenState extends State<AppIntroScreen> {
 
                   const SizedBox(height: 12),
 
-                  // Video Upload Button
-                  Container(
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color.fromARGB(255, 109, 149, 209), Color.fromARGB(255, 84, 162, 235)],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color.fromARGB(255, 39, 82, 176).withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: _isLoading ? null : () {
-                        Navigator.of(context).pop(); // Close dialog
-                        _openVideoAnalysis();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        foregroundColor: Colors.white,
-                        shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      icon: const Icon(Icons.video_library, size: 20),
-                      label: const Text(
-                        'Upload Video Analysis',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
+                  
+                  
 
                   // Cancel Button
                   TextButton(
@@ -691,38 +651,7 @@ Future<void> _openAIRecognitionCamera() async {
   }
 }
 
-// Video Analysis Method
-Future<void> _openVideoAnalysis() async {
-  try {
-    setState(() {
-      _isLoading = true;
-    });
 
-    // Navigate to video analysis screen
-    if (mounted) {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const VideoAnalysisScreen(),
-        ),
-      );
-    }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error opening video analysis: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-    print('Error opening video analysis: $e');
-  } finally {
-    setState(() {
-      _isLoading = false;
-    });
-  }
-}
 
   Widget _buildFeatureItem(IconData icon, String title, String description) {
     return Container(

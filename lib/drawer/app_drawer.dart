@@ -13,7 +13,7 @@ import '../screens/exercise_list.dart';
 import '../screens/workout_plan.dart';
 import '../screens/diet_plan.dart';
 import '../screens/exercise_history.dart';
-import '../screens/video_analysis_screen.dart';
+
 import '../services/change_password.dart' as change_password_service;
 import '../screens/camera_screen_for_ai_recognition.dart';
 
@@ -295,7 +295,7 @@ class _AppDrawerState extends State<AppDrawer> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Select exercises from our curated list, use AI recognition, or upload a video for analysis.',
+                      'Select exercises from our curated list or use AI recognition.',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.9),
                         fontSize: 14,
@@ -335,22 +335,8 @@ class _AppDrawerState extends State<AppDrawer> {
                         );
                       },
                     ),
-                    const SizedBox(height: 12),
-                    _buildExerciseOptionButton(
-                      context,
-                      'Upload Video Analysis',
-                      Icons.video_library,
-                      [Color.fromARGB(255, 109, 149, 209), Color.fromARGB(255, 84, 162, 235)],
-                      _isLoading ? null : () {
-                        Navigator.of(context).pop();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const VideoAnalysisScreen(),
-                          ),
-                        );
-                      },
-                    ),
+                    
+                    
                     const SizedBox(height: 16),
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
@@ -458,26 +444,7 @@ class _AppDrawerState extends State<AppDrawer> {
     }
   }
 
-  Future<void> _openVideoAnalysis(BuildContext context) async {
-    if (!mounted) return;
-    
-    try {
-      setState(() => _isLoading = true);
-
-      await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const VideoAnalysisScreen()),
-      );
-    } catch (e) {
-      if (mounted) {
-        _showSnackBar(context, 'Error opening video analysis: $e', isError: true);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
+  
 
   Widget _buildSectionHeader(String title) {
     return Padding(

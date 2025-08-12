@@ -6,7 +6,7 @@ import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:virtual_exercise_assistant/screens/simple_camera_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../services/exercise_form_detector.dart';
+
 import '../../utils/pushup_analyzer.dart';
 import '../../utils/pullup_analyzer.dart';
 import '../../utils/benchpress_analyzer.dart';
@@ -32,7 +32,7 @@ abstract class CameraScreenState extends State<SimpleCameraScreen>
   DateTime? _sessionStartTime;
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
-  late ExerciseFormDetector _formDetector;
+  
   String _currentFeedback = 'Position yourself in frame';
   Color _feedbackColor = Colors.blue;
   int _repCount = 0;
@@ -66,7 +66,7 @@ abstract class CameraScreenState extends State<SimpleCameraScreen>
     WidgetsBinding.instance.addObserver(this);
     _initializePoseDetector();
     _ttsService = TtsService();
-    _initializeFormDetector();
+   
     _initializeAnimations();
     _sessionId = widget.sessionId;
     _sessionStartTime = DateTime.now();
@@ -122,13 +122,7 @@ abstract class CameraScreenState extends State<SimpleCameraScreen>
     }
   }
 
-  void _initializeFormDetector() {
-    _formDetector = ExerciseFormDetector(
-      onFeedbackUpdate: _updateFeedback,
-      onRepCountUpdate: _onRepCountUpdate,
-      initialExercise: widget.exerciseName ?? 'Push Ups',
-    );
-  }
+  
 
   Future<void> _requestPermissions() async {
     final status = await Permission.camera.request();
@@ -188,7 +182,7 @@ abstract class CameraScreenState extends State<SimpleCameraScreen>
       _cameraController?.dispose();
     }
 
-    _formDetector.dispose();
+    
     super.dispose();
   }
 
@@ -352,12 +346,7 @@ abstract class CameraScreenState extends State<SimpleCameraScreen>
           await _processSquatImage(inputImage);
         } else if (_isTricepPushdownExercise) {
           await _processTricepPushDownImage(inputImage);
-        } else {
-          await _formDetector.processImage(
-            inputImage,
-            widget.exerciseName ?? 'Push Ups',
-          );
-        }
+        } 
       }
     } catch (e) {
       print('Error processing image: $e');
